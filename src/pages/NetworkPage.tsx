@@ -1,6 +1,10 @@
+import { useState, useEffect } from 'react';
 import { networkFlows } from '@/data/mockData';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Network, AlertTriangle, ArrowRightLeft } from 'lucide-react';
+import PageHeader from '@/components/widgets/PageHeader';
+import { ChartSkeleton, TableSkeleton } from '@/components/widgets/Skeletons';
+import { useChartTheme } from '@/hooks/useChartTheme';
 
 const portStats = networkFlows.reduce((acc, f) => {
   if (f.port > 0) {
@@ -22,30 +26,46 @@ const anomalies = [
 ];
 
 const NetworkPage = () => {
+  const chart = useChartTheme();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Hành vi mạng" description="Phân tích luồng kết nối và phát hiện bất thường" />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <TableSkeleton rows={6} cols={4} />
+          <ChartSkeleton />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-foreground">Hành vi mạng</h2>
-        <p className="text-sm text-muted-foreground">Phân tích luồng kết nối và phát hiện bất thường</p>
-      </div>
+      <PageHeader title="Hành vi mạng" description="Phân tích luồng kết nối và phát hiện bất thường" />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {/* Network flows */}
         <div className="rounded-lg border border-border bg-card p-5">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <ArrowRightLeft size={16} className="text-primary" />
+            <ArrowRightLeft size={15} className="text-primary" />
             Luồng kết nối mạng
           </h3>
-          <div className="space-y-2 max-h-[360px] overflow-y-auto pr-2">
+          <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
             {networkFlows.map((f, i) => (
-              <div key={i} className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 px-3 py-2.5 text-xs">
+              <div key={i} className="flex items-center justify-between rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-xs transition-colors hover:bg-accent/30">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-mono text-primary whitespace-nowrap">{f.source}</span>
                   <span className="text-muted-foreground">→</span>
                   <span className="font-mono whitespace-nowrap">{f.destination}</span>
                 </div>
                 <div className="flex items-center gap-3 shrink-0 ml-3">
-                  <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] font-medium">{f.protocol}</span>
+                  <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{f.protocol}</span>
                   <span className="text-muted-foreground font-mono">:{f.port}</span>
                   <span className="text-muted-foreground">{(f.bytes / 1048576).toFixed(1)}MB</span>
                 </div>
@@ -54,41 +74,37 @@ const NetworkPage = () => {
           </div>
         </div>
 
-        {/* Top ports */}
         <div className="rounded-lg border border-border bg-card p-5">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Network size={16} className="text-primary" />
+            <Network size={15} className="text-primary" />
             Top port sử dụng
           </h3>
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={topPorts} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 16%)" />
-              <XAxis type="number" stroke="hsl(215 20% 55%)" tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="name" stroke="hsl(215 20% 55%)" tick={{ fontSize: 11 }} width={100} />
-              <Tooltip contentStyle={{ backgroundColor: 'hsl(222 44% 8%)', border: '1px solid hsl(222 30% 16%)', borderRadius: '8px', color: 'hsl(210 40% 92%)' }} />
-              <Bar dataKey="packets" fill="hsl(210 100% 52%)" radius={[0, 4, 4, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chart.gridStroke} />
+              <XAxis type="number" stroke={chart.axisStroke} tick={chart.axisTick} />
+              <YAxis type="category" dataKey="name" stroke={chart.axisStroke} tick={chart.axisTick} width={100} />
+              <Tooltip contentStyle={chart.tooltipStyle} />
+              <Bar dataKey="packets" fill={chart.colors.primary} radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Anomalies */}
       <div className="rounded-lg border border-border bg-card p-5">
         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <AlertTriangle size={16} className="text-warning" />
+          <AlertTriangle size={15} className="text-warning" />
           Phát hiện bất thường
         </h3>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {anomalies.map(a => (
-            <div key={a.id} className={`rounded-md border p-4 ${a.severity === 'Critical' ? 'border-critical/30 bg-critical/5' : 'border-warning/30 bg-warning/5'}`}>
+            <div key={a.id} className={`rounded-lg border p-4 transition-colors hover:bg-accent/20 ${a.severity === 'Critical' ? 'border-critical/20' : 'border-warning/20'}`}>
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm font-medium text-foreground">{a.description}</p>
-                  <p className="mt-1 text-xs text-muted-foreground font-mono">
-                    {a.source} → {a.destination}
-                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground font-mono">{a.source} → {a.destination}</p>
                 </div>
-                <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${a.severity === 'Critical' ? 'border-critical/30 bg-critical/15 text-critical' : 'border-medium/30 bg-medium/15 text-medium'}`}>
+                <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${a.severity === 'Critical' ? 'border-critical/30 bg-critical/10 text-critical' : 'border-medium/30 bg-medium/10 text-medium'}`}>
                   {a.severity}
                 </span>
               </div>
