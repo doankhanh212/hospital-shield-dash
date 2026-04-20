@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Local backend secrets and runtime caches
+passive_asset_intel/.env
+passive_asset_intel/.mac_vendor_cache.json

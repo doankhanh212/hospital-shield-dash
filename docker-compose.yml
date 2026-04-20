@@ -1,0 +1,96 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-passive_asset_intel}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./passive_asset_intel/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-passive_asset_intel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (caching / future queue) ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ── FastAPI backend ─────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-passive_asset_intel}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      DB_POOL_MIN: ${DB_POOL_MIN:-2}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      BATCH_SIZE: ${BATCH_SIZE:-500}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ZEEK_LOG_DIR: /logs
+      SCAN_MODE: ${SCAN_MODE:-live}
+      ZEEK_INTERFACE: ${ZEEK_INTERFACE:-}
+      LOCAL_SUBNETS: ${LOCAL_SUBNETS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-7}
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost,http://localhost:8080}
+    volumes:
+      # Mount Zeek logs from host — READ-ONLY.
+      # For mock/demo deployments without a real Zeek sensor, point this at
+      # an empty folder (setup.sh creates ./zeek-logs automatically).
+      - ${ZEEK_HOST_LOG_DIR:-./zeek-logs}:/logs:ro
+    ports:
+      - "127.0.0.1:3001:3001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── Nginx reverse proxy + static frontend ───────────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.nginx
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Uncomment for TLS:
+      # - ./deploy/certs/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
+      # - ./deploy/certs/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
+
+volumes:
+  pgdata:

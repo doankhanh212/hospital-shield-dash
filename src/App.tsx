@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,14 +13,27 @@ import NetworkPage from "./pages/NetworkPage";
 import AlertsPage from "./pages/AlertsPage";
 import LogsPage from "./pages/LogsPage";
 import SettingsPage from "./pages/SettingsPage";
+import LoginPage from "./pages/LoginPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminRolesPage from "./pages/admin/AdminRolesPage";
 import AdminSystemPage from "./pages/admin/AdminSystemPage";
 import AdminRulesPage from "./pages/admin/AdminRulesPage";
 import AdminIntegrationsPage from "./pages/admin/AdminIntegrationsPage";
+import AdminSetupWizardPage from "./pages/admin/AdminSetupWizardPage";
 import NotFound from "./pages/NotFound";
+import { authStorage } from "./lib/auth";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, refetchOnWindowFocus: false },
+  },
+});
+
+/** Redirect to /login if not authenticated. */
+const RequireAuth = ({ children }: { children: React.ReactNode }) => {
+  if (!authStorage.isLoggedIn()) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
 
 const App = () => (
   <ThemeProvider>
@@ -30,7 +43,14 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route element={<DashboardLayout />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              element={
+                <RequireAuth>
+                  <DashboardLayout />
+                </RequireAuth>
+              }
+            >
               <Route path="/" element={<DashboardPage />} />
               <Route path="/assets" element={<AssetsPage />} />
               <Route path="/assets/:id" element={<AssetDetailPage />} />
@@ -44,6 +64,7 @@ const App = () => (
               <Route path="/admin/system" element={<AdminSystemPage />} />
               <Route path="/admin/rules" element={<AdminRulesPage />} />
               <Route path="/admin/integrations" element={<AdminIntegrationsPage />} />
+              <Route path="/admin/setup" element={<AdminSetupWizardPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

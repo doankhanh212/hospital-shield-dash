@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.env
+*.log
+logs/
+__pycache__
+*.pyc
+.pytest_cache
+.vscode
+.idea
+tests/
+docs/
+*.md
+!passive_asset_intel/requirements.txt

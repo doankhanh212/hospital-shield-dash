@@ -1,34 +1,39 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { Sun, Moon, ChevronDown } from 'lucide-react';
 import {
-  LayoutDashboard, Monitor, Bug, Network, Bell, ScrollText, Settings, Shield,
-  Users, ShieldCheck, Cog, FileCode, Plug
+  LayoutDashboard, Monitor, Share2, Bell, ScrollText, Shield,
+  Users, ShieldCheck, Cog, Plug
 } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useState } from 'react';
 
-const mainMenu = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/assets', icon: Monitor, label: 'Tài sản' },
-  { path: '/vulnerabilities', icon: Bug, label: 'Lỗ hổng' },
-  { path: '/network', icon: Network, label: 'Hành vi mạng' },
-  { path: '/alerts', icon: Bell, label: 'Cảnh báo', badge: 4 },
-  { path: '/logs', icon: ScrollText, label: 'Nhật ký' },
+// GIÁM SÁT — daily monitoring surface
+const monitoringMenu = [
+  { path: '/',        icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/assets',  icon: Monitor,         label: 'Tài sản' },
+  { path: '/network', icon: Share2,          label: 'Sơ đồ mạng' },
 ];
 
+// PHÂN TÍCH — investigation surface
+const analysisMenu = [
+  { path: '/alerts',    icon: Bell,       label: 'Cảnh báo', badge: 4 },
+  { path: '/logs',      icon: ScrollText, label: 'Nhật ký' },
+];
+
+// QUẢN TRỊ — admin surface
 const adminMenu = [
-  { path: '/admin/users', icon: Users, label: 'Người dùng' },
-  { path: '/admin/roles', icon: ShieldCheck, label: 'Phân quyền' },
-  { path: '/admin/system', icon: Cog, label: 'Cấu hình hệ thống' },
-  { path: '/admin/rules', icon: FileCode, label: 'Rule Detection' },
-  { path: '/admin/integrations', icon: Plug, label: 'Tích hợp' },
-  { path: '/settings', icon: Settings, label: 'Cài đặt' },
+  { path: '/admin/users',        icon: Users,       label: 'Người dùng' },
+  { path: '/admin/roles',        icon: ShieldCheck, label: 'Phân quyền' },
+  { path: '/admin/integrations', icon: Plug,        label: 'Tích hợp' },
+  { path: '/admin/system',       icon: Cog,         label: 'Cấu hình hệ thống' },
 ];
 
 const AppSidebar = () => {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
-  const [adminOpen, setAdminOpen] = useState(location.pathname.startsWith('/admin') || location.pathname === '/settings');
+  const [adminOpen, setAdminOpen] = useState(
+    location.pathname.startsWith('/admin') || location.pathname === '/settings',
+  );
 
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
@@ -67,13 +72,19 @@ const AppSidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-5">
-        {/* Main */}
+        {/* GIÁM SÁT */}
         <div className="space-y-0.5">
           <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">Giám sát</p>
-          {mainMenu.map(item => <MenuItem key={item.path} {...item} />)}
+          {monitoringMenu.map(item => <MenuItem key={item.path} {...item} />)}
         </div>
 
-        {/* Admin */}
+        {/* PHÂN TÍCH */}
+        <div className="space-y-0.5">
+          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">Phân tích</p>
+          {analysisMenu.map(item => <MenuItem key={item.path} {...item} />)}
+        </div>
+
+        {/* QUẢN TRỊ */}
         <div className="space-y-0.5">
           <button
             onClick={() => setAdminOpen(!adminOpen)}
