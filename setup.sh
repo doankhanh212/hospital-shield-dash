@@ -149,8 +149,59 @@ mkdir -p ./zeek-logs
 # ── 3. Reset (optional) ─────────────────────────────────────────────────────
 if [[ "$DO_RESET" -eq 1 ]]; then
     log "Resetting — bringing stack down + removing postgres volume"
-    $COMPOSE down -v
+    $COMPOSE down -v || true
 fi
+
+# ── 3b. Cleanup stale Docker state ──────────────────────────────────────────
+# Cleans up leftovers from previous runs that can cause weird build/pull
+# failures (dangling images, broken builder cache, IPv6-only DNS, stopped
+# containers from a prior setup attempt).
+log "Cleaning up stale Docker state"
+
+# Stop + remove any old containers/networks from this project
+$COMPOSE down --remove-orphans 2>/dev/null || true
+
+# Remove any dangling containers with our project name still lingering
+for cname in $(docker ps -aq --filter "name=hospital-shield-dash" 2>/dev/null); do
+    docker rm -f "$cname" >/dev/null 2>&1 || true
+done
+
+# Prune dangling images + build cache (safe — keeps images still in use)
+docker image prune -f >/dev/null 2>&1 || true
+docker builder prune -f >/dev/null 2>&1 || true
+
+# Force IPv4 for Docker daemon — many VPS providers (including this one)
+# advertise AAAA records but have no IPv6 route, so pulls from Docker Hub
+# fail with "network is unreachable". Setting ipv6:false + explicit IPv4
+# DNS fixes it permanently.
+if [[ ! -f /etc/docker/daemon.json ]] || ! grep -q '"ipv6"' /etc/docker/daemon.json 2>/dev/null; then
+    log "Configuring Docker daemon for IPv4-only pulls"
+    mkdir -p /etc/docker
+    cat > /etc/docker/daemon.json <<'EOF'
+{
+  "dns": ["8.8.8.8", "1.1.1.1"],
+  "ipv6": false
+}
+EOF
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl restart docker || true
+        # Give the daemon a moment to come back up
+        for _ in 1 2 3 4 5; do
+            docker info >/dev/null 2>&1 && break
+            sleep 1
+        done
+    fi
+    ok "Docker daemon restarted with IPv4-only config"
+fi
+
+# Pre-pull base images so build doesn't die mid-way on flaky networks
+log "Pre-pulling base images (skip if already cached)"
+for img in nginx:1.27-alpine node:20-alpine python:3.12-slim postgres:16-alpine redis:7-alpine; do
+    if ! docker image inspect "$img" >/dev/null 2>&1; then
+        docker pull "$img" || warn "Could not pre-pull $img — build step will retry"
+    fi
+done
+ok "Docker state cleaned"
 
 # ── 4. Build + start ────────────────────────────────────────────────────────
 log "Building images (first run can take 3–5 minutes)"
