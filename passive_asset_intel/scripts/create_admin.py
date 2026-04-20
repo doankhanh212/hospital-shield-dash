@@ -67,8 +67,8 @@ def main() -> int:
     p.add_argument("--role", default="admin", choices=["admin", "analyst"])
     args = p.parse_args()
 
-    if len(args.password) < 10:
-        print("ERROR: password must be >= 10 characters", file=sys.stderr)
+    if not args.password:
+        print("ERROR: password cannot be empty", file=sys.stderr)
         return 2
 
     msg = asyncio.run(upsert_user(args.username, args.password, args.role))

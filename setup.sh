@@ -2,11 +2,15 @@
 # ==============================================================================
 # Hospital Shield — one-shot deployment script.
 #
+# Chay 1 lenh la cai + tao admin (prompt interactive) + seed mock data + start.
+#
 #   ./setup.sh                 — full install + seed mock data + start
 #   ./setup.sh --no-seed       — install without mock data
 #   ./setup.sh --reset         — wipe database, rebuild, reseed
 #   ./setup.sh --domain <fqdn> — set API_CORS_ORIGINS to include that domain
+#   ./setup.sh --assets <N>    — seed N mock assets (default 60)
 #
+# Se hoi username/password admin ngay khi chay (khong bat buoc do dai).
 # Safe to re-run: each step is idempotent.
 # ==============================================================================
 
@@ -29,8 +33,8 @@ die()  { printf '%s ✗%s  %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 DO_SEED=1
 DO_RESET=0
 DOMAIN=""
-ADMIN_USER="${ADMIN_USER:-admin}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+ADMIN_USER=""
+ADMIN_PASSWORD=""
 TARGET_ASSETS="${TARGET_ASSETS:-60}"
 
 while [[ $# -gt 0 ]]; do
@@ -38,8 +42,6 @@ while [[ $# -gt 0 ]]; do
         --no-seed)        DO_SEED=0 ;;
         --reset)          DO_RESET=1 ;;
         --domain)         shift; DOMAIN="${1:-}" ;;
-        --admin-user)     shift; ADMIN_USER="${1:-}" ;;
-        --admin-password) shift; ADMIN_PASSWORD="${1:-}" ;;
         --assets)         shift; TARGET_ASSETS="${1:-60}" ;;
         -h|--help)
             sed -n '2,12p' "$0"; exit 0 ;;
@@ -47,6 +49,21 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+
+# ── Prompt for admin credentials up front ──────────────────────────────────
+echo
+echo "${C_BOLD}Tao tai khoan admin cho Hospital Shield${C_RESET}"
+while [[ -z "$ADMIN_USER" ]]; do
+    read -r -p "  Username: " ADMIN_USER
+done
+while [[ -z "$ADMIN_PASSWORD" ]]; do
+    read -r -s -p "  Password: " ADMIN_PASSWORD
+    echo
+    if [[ -z "$ADMIN_PASSWORD" ]]; then
+        warn "Password khong duoc de trong — nhap lai"
+    fi
+done
+echo
 
 # ── Pre-flight ──────────────────────────────────────────────────────────────
 cd "$(dirname "$0")"
@@ -157,9 +174,6 @@ done
 ok "API is up: $API_URL"
 
 # ── 6. Create admin account ─────────────────────────────────────────────────
-if [[ -z "$ADMIN_PASSWORD" ]]; then
-    ADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-16)Aa1!"
-fi
 log "Creating admin account '$ADMIN_USER'"
 $COMPOSE exec -T app python -m passive_asset_intel.scripts.create_admin \
     --username "$ADMIN_USER" \
@@ -189,9 +203,9 @@ echo "    • http://localhost/                  (on this host)"
 [[ -n "$PUBLIC_IP" ]] && echo "    • http://$PUBLIC_IP/                 (public)"
 [[ -n "$DOMAIN" ]]    && echo "    • http://$DOMAIN/                    (domain)"
 echo
-echo "  Admin credentials (save these now — password is only shown once):"
+echo "  Admin credentials:"
 echo "    • username: ${C_BOLD}$ADMIN_USER${C_RESET}"
-echo "    • password: ${C_BOLD}$ADMIN_PASSWORD${C_RESET}"
+echo "    • password: ${C_BOLD}(cai ban vua nhap)${C_RESET}"
 echo
 echo "  Useful commands:"
 echo "    $COMPOSE logs -f app        # tail API logs"
