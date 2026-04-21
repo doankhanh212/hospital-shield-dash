@@ -29,6 +29,82 @@ ok()   { printf '%s ✓%s  %s\n' "$C_GREEN" "$C_RESET" "$*"; }
 warn() { printf '%s ⚠%s  %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()  { printf '%s ✗%s  %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 
+wait_for_http() {
+    local url="$1"
+    local name="$2"
+    local timeout="${3:-120}"
+    local deadline=$(( $(date +%s) + timeout ))
+
+    until curl -fsS "$url" >/dev/null 2>&1; do
+        if [[ $(date +%s) -gt $deadline ]]; then
+            return 1
+        fi
+        sleep 2
+    done
+
+    ok "$name is up: $url"
+}
+
+cleanup_project_state() {
+    log "Cleaning up stale Docker state"
+
+    $COMPOSE down --remove-orphans 2>/dev/null || true
+
+    if [[ -n "${PROJECT_SLUG:-}" ]]; then
+        while IFS= read -r cid; do
+            [[ -n "$cid" ]] || continue
+            docker rm -f "$cid" >/dev/null 2>&1 || true
+        done < <(docker ps -aq --filter "label=com.docker.compose.project=$PROJECT_SLUG" 2>/dev/null || true)
+    fi
+
+    if [[ "$DO_RESET" -eq 1 ]]; then
+        for img in "${APP_IMAGE:-}" "${APP_IMAGE:-}:latest" "${NGINX_IMAGE:-}" "${NGINX_IMAGE:-}:latest"; do
+            [[ -n "$img" ]] || continue
+            docker image rm -f "$img" >/dev/null 2>&1 || true
+        done
+
+        log "Reset mode: clearing staged bind-mount logs"
+        find ./zeek-logs -mindepth 1 -maxdepth 1 -type f \( -name '*.log' -o -name '*.log.gz' \) -delete 2>/dev/null || true
+    fi
+
+    docker image prune -f >/dev/null 2>&1 || true
+    docker builder prune -f >/dev/null 2>&1 || true
+    ok "Docker state cleaned"
+}
+
+build_stack() {
+    local -a build_args=(build)
+    local attempt=1
+    local max_attempts=2
+
+    if [[ "$DO_RESET" -eq 1 ]]; then
+        build_args+=(--pull --no-cache)
+    fi
+
+    while true; do
+        if [[ "$attempt" -eq 1 ]]; then
+            log "Building images (first run can take 3–5 minutes)"
+        else
+            warn "Build failed on attempt $((attempt - 1)) — pruning builder cache and retrying"
+            docker builder prune -af >/dev/null 2>&1 || true
+            for img in "$APP_IMAGE" "$APP_IMAGE:latest" "$NGINX_IMAGE" "$NGINX_IMAGE:latest"; do
+                docker image rm -f "$img" >/dev/null 2>&1 || true
+            done
+        fi
+
+        if $COMPOSE "${build_args[@]}"; then
+            ok "Images built successfully"
+            return 0
+        fi
+
+        if [[ "$attempt" -ge "$max_attempts" ]]; then
+            return 1
+        fi
+
+        attempt=$((attempt + 1))
+    done
+}
+
 # ── Args ────────────────────────────────────────────────────────────────────
 DO_SEED=1
 DO_RESET=0
@@ -68,6 +144,11 @@ echo
 # ── Pre-flight ──────────────────────────────────────────────────────────────
 cd "$(dirname "$0")"
 [[ -f docker-compose.yml ]] || die "docker-compose.yml not found — run setup.sh from the repo root."
+
+PROJECT_SLUG="$(basename "$PWD" | tr -cd '[:alnum:]_-')"
+APP_IMAGE="$PROJECT_SLUG-app"
+NGINX_IMAGE="$PROJECT_SLUG-nginx"
+PG_VOL_NAME="${PROJECT_SLUG}_pgdata"
 
 if [[ $EUID -ne 0 ]] && ! groups | grep -qw docker; then
     warn "You are not root and not in the 'docker' group — Docker commands may require sudo."
@@ -143,7 +224,6 @@ if [[ ! -f .env ]]; then
     # volume was initialised with a DIFFERENT password, so Postgres will
     # reject the app's connection with "password authentication failed".
     # Force-remove the stale volume now so Postgres re-initialises cleanly.
-    PG_VOL_NAME="$(basename "$PWD" | tr -cd '[:alnum:]_-')_pgdata"
     if docker volume inspect "$PG_VOL_NAME" >/dev/null 2>&1; then
         warn "Found stale Postgres volume from previous run — removing so new DB_PASSWORD takes effect"
         $COMPOSE down -v 2>/dev/null || true
@@ -161,14 +241,14 @@ mkdir -p ./zeek-logs
 # ── 3. Reset (optional) ─────────────────────────────────────────────────────
 if [[ "$DO_RESET" -eq 1 ]]; then
     log "Resetting — bringing stack down + removing postgres volume"
-    $COMPOSE down -v || true
+    $COMPOSE down -v --remove-orphans || true
+    docker volume rm -f "$PG_VOL_NAME" >/dev/null 2>&1 || true
 fi
 
 # ── 3a. Detect stale Postgres volume (password mismatch) ────────────────────
 # If a pgdata volume exists from a previous run but the DB_PASSWORD in .env
 # no longer matches what Postgres was initialised with, the app container
 # will crash with "password authentication failed". Auto-detect & auto-reset.
-PG_VOL_NAME="$(basename "$PWD" | tr -cd '[:alnum:]_-')_pgdata"
 if docker volume inspect "$PG_VOL_NAME" >/dev/null 2>&1; then
     CURRENT_DB_PASS="$(grep -E '^DB_PASSWORD=' .env | head -n1 | cut -d= -f2-)"
     # Quick probe: try to auth against the running postgres container (if any)
@@ -186,19 +266,6 @@ fi
 # Cleans up leftovers from previous runs that can cause weird build/pull
 # failures (dangling images, broken builder cache, IPv6-only DNS, stopped
 # containers from a prior setup attempt).
-log "Cleaning up stale Docker state"
-
-# Stop + remove any old containers/networks from this project
-$COMPOSE down --remove-orphans 2>/dev/null || true
-
-# Remove any dangling containers with our project name still lingering
-for cname in $(docker ps -aq --filter "name=hospital-shield-dash" 2>/dev/null); do
-    docker rm -f "$cname" >/dev/null 2>&1 || true
-done
-
-# Prune dangling images + build cache (safe — keeps images still in use)
-docker image prune -f >/dev/null 2>&1 || true
-docker builder prune -f >/dev/null 2>&1 || true
 
 # Force IPv4 for Docker daemon — many VPS providers (including this one)
 # advertise AAAA records but have no IPv6 route, so pulls from Docker Hub
@@ -231,28 +298,30 @@ for img in nginx:1.27-alpine node:20-alpine python:3.12-slim postgres:16-alpine 
         docker pull "$img" || warn "Could not pre-pull $img — build step will retry"
     fi
 done
-ok "Docker state cleaned"
+cleanup_project_state
 
 # ── 4. Build + start ────────────────────────────────────────────────────────
-log "Building images (first run can take 3–5 minutes)"
-$COMPOSE build
+build_stack || die "Image build failed after retry — inspect Docker output above."
 
 log "Starting stack"
-$COMPOSE up -d
+$COMPOSE up -d --force-recreate --remove-orphans
 
 # ── 5. Wait for the API to come up ──────────────────────────────────────────
 log "Waiting for the API to become healthy..."
 API_URL="http://localhost:3001/health"
-deadline=$(( $(date +%s) + 120 ))
-until curl -fsS "$API_URL" >/dev/null 2>&1; do
-    if [[ $(date +%s) -gt $deadline ]]; then
-        warn "API did not become healthy in 120s. Showing last logs:"
-        $COMPOSE logs --tail=80 app || true
-        die "Giving up."
-    fi
-    sleep 2
-done
-ok "API is up: $API_URL"
+if ! wait_for_http "$API_URL" "API" 120; then
+    warn "API did not become healthy in 120s. Showing last logs:"
+    $COMPOSE logs --tail=80 app || true
+    die "Giving up."
+fi
+
+log "Waiting for the Web UI to respond..."
+UI_URL="http://localhost/"
+if ! wait_for_http "$UI_URL" "Web UI" 60; then
+    warn "Web UI did not become ready in 60s. Showing last logs:"
+    $COMPOSE logs --tail=80 nginx || true
+    die "Giving up."
+fi
 
 # ── 6. Create admin account ─────────────────────────────────────────────────
 log "Creating admin account '$ADMIN_USER'"
@@ -269,10 +338,13 @@ if [[ "$DO_SEED" -eq 1 ]]; then
     # Copy real Zeek logs into the bind-mount folder if the user shipped any
     if [[ -d ./logs ]] && ls ./logs/conn.log* >/dev/null 2>&1; then
         log "Copying Zeek logs from ./logs to ./zeek-logs (bind mount)"
-        # Use cp -n to avoid overwriting anything already in zeek-logs
-        cp -n ./logs/*.log ./zeek-logs/ 2>/dev/null || true
-        # Also copy any rotated .log.gz files the parsers understand
-        cp -n ./logs/*.log.gz ./zeek-logs/ 2>/dev/null || true
+        if [[ "$DO_RESET" -eq 1 ]]; then
+            cp -f ./logs/*.log ./zeek-logs/ 2>/dev/null || true
+            cp -f ./logs/*.log.gz ./zeek-logs/ 2>/dev/null || true
+        else
+            cp -n ./logs/*.log ./zeek-logs/ 2>/dev/null || true
+            cp -n ./logs/*.log.gz ./zeek-logs/ 2>/dev/null || true
+        fi
         ok "Zeek logs staged in ./zeek-logs"
 
         log "Ingesting Zeek logs + running inference (can take a few minutes on 24MB conn.log)"
