@@ -104,6 +104,8 @@ export const useNvdSync = () => {
       qc.invalidateQueries({ queryKey: ['assets'] });
       qc.invalidateQueries({ queryKey: ['asset'] });
       qc.invalidateQueries({ queryKey: ['vulnerabilities'] });
+      qc.invalidateQueries({ queryKey: ['alerts'] });
+      qc.invalidateQueries({ queryKey: ['alertCounts'] });
     },
   });
 };
@@ -116,6 +118,19 @@ export const useNvdTest = () => {
       qc.invalidateQueries({ queryKey: ['assets'] });
       qc.invalidateQueries({ queryKey: ['asset'] });
       qc.invalidateQueries({ queryKey: ['vulnerabilities'] });
+      qc.invalidateQueries({ queryKey: ['alerts'] });
+      qc.invalidateQueries({ queryKey: ['alertCounts'] });
+    },
+  });
+};
+
+export const useNvdGenerateAlerts = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.nvdGenerateAlerts(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['alerts'] });
+      qc.invalidateQueries({ queryKey: ['alertCounts'] });
     },
   });
 };

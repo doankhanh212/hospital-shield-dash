@@ -138,6 +138,54 @@ async def test_nvd_sync(
         raise HTTPException(status_code=500, detail={"error": str(e), "type": "internal"})
 
 
+@router.post("/nvd/generate-alerts")
+async def generate_vuln_alerts(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """Synchronously generate vulnerability alerts for all asset-CVE links.
+
+    Useful when the background NVD sync linked CVEs to assets but was
+    interrupted before creating alerts, or when re-running alert generation
+    after reviewing false positives.
+
+    Returns the number of *new* alerts created (existing ones are skipped).
+    """
+    try:
+        config = await get_nvd_config(pool)
+        if not config or not config.get("api_key"):
+            raise HTTPException(
+                status_code=400,
+                detail="NVD API key not configured.",
+            )
+
+        from passive_asset_intel.services.nvd_service import _generate_vuln_alerts  # noqa: PLC0415
+
+        # Check how many asset-vuln links exist first
+        async with pool.acquire() as conn:
+            total_links = await conn.fetchval(
+                "SELECT COUNT(*) FROM asset_vulnerabilities"
+            ) or 0
+            existing_alerts = await conn.fetchval(
+                "SELECT COUNT(*) FROM alerts WHERE alert_type = 'vulnerability'"
+            ) or 0
+
+        alerts_created = await _generate_vuln_alerts(pool)
+
+        return {
+            "status": "ok",
+            "alerts_created": alerts_created,
+            "total_asset_vuln_links": total_links,
+            "existing_vuln_alerts": existing_alerts,
+            "message": f"{alerts_created} cảnh báo mới được tạo." if alerts_created else "Không có cảnh báo mới (có thể tất cả đã tồn tại hoặc không có dữ liệu CVE).",
+        }
+    except HTTPException:
+        raise
+    except asyncpg.PostgresError as e:
+        raise HTTPException(status_code=500, detail={"error": str(e), "type": "database"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"error": str(e), "type": "internal"})
+
+
 async def _run_sync(pool: asyncpg.Pool) -> None:
     """Background task wrapper for NVD sync."""
     try:

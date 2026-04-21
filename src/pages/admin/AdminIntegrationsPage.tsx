@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Activity, AlertCircle, Bug, CheckCircle2, Database, Loader2, RefreshCw, Save, Shield, XCircle, FlaskConical, Clock } from 'lucide-react';
+import { Activity, AlertCircle, Bell, Bug, CheckCircle2, Database, Loader2, RefreshCw, Save, Shield, XCircle, FlaskConical, Clock } from 'lucide-react';
 import PageHeader from '@/components/widgets/PageHeader';
-import { useHealth, useNvdIntegration, useNvdSave, useNvdSync, useNvdTest } from '@/hooks/useApi';
+import { useHealth, useNvdIntegration, useNvdSave, useNvdSync, useNvdTest, useNvdGenerateAlerts } from '@/hooks/useApi';
 
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
 
@@ -28,6 +28,7 @@ const AdminIntegrationsPage = () => {
   const nvdSave = useNvdSave();
   const nvdSync = useNvdSync();
   const nvdTest = useNvdTest();
+  const nvdGenerateAlerts = useNvdGenerateAlerts();
 
   const runtimeCards: RuntimeCard[] = [
     {
@@ -152,7 +153,7 @@ const AdminIntegrationsPage = () => {
         </div>
 
         <div className="space-y-4 p-4">
-          {(nvdSave.error || nvdSync.error || nvdTest.error) && (
+          {(nvdSave.error || nvdSync.error || nvdTest.error || nvdGenerateAlerts.error) && (
             <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
               <AlertCircle size={13} />
               {nvdSave.error instanceof Error
@@ -161,6 +162,8 @@ const AdminIntegrationsPage = () => {
                 ? nvdSync.error.message
                 : nvdTest.error instanceof Error
                 ? nvdTest.error.message
+                : nvdGenerateAlerts.error instanceof Error
+                ? nvdGenerateAlerts.error.message
                 : 'Lỗi'}
             </div>
           )}
@@ -212,8 +215,50 @@ const AdminIntegrationsPage = () => {
                 {nvdTest.isPending ? <Loader2 size={13} className="animate-spin" /> : <FlaskConical size={13} />}
                 Test CVE
               </button>
+              <button
+                onClick={() => nvdGenerateAlerts.mutate()}
+                disabled={!nvdData?.configured || nvdGenerateAlerts.isPending}
+                className="flex flex-1 min-w-[110px] items-center justify-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Tạo cảnh báo từ CVE đã liên kết (không sync lại)"
+              >
+                {nvdGenerateAlerts.isPending ? <Loader2 size={13} className="animate-spin" /> : <Bell size={13} />}
+                Tạo cảnh báo
+              </button>
             </div>
           </div>
+
+          {nvdGenerateAlerts.data && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Bell size={14} className="text-amber-400" />
+                <span className="text-xs font-semibold text-foreground">Kết quả Tạo cảnh báo</span>
+                {nvdGenerateAlerts.data.alerts_created > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
+                    <CheckCircle2 size={10} /> {nvdGenerateAlerts.data.alerts_created} cảnh báo mới
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Không có mới
+                  </span>
+                )}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-md border border-border bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cảnh báo mới tạo</div>
+                  <div className="mt-1 text-sm font-semibold text-amber-400">{nvdGenerateAlerts.data.alerts_created}</div>
+                </div>
+                <div className="rounded-md border border-border bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Liên kết CVE tổng</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{nvdGenerateAlerts.data.total_asset_vuln_links}</div>
+                </div>
+                <div className="rounded-md border border-border bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cảnh báo CVE hiện có</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{nvdGenerateAlerts.data.existing_vuln_alerts}</div>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">{nvdGenerateAlerts.data.message}</p>
+            </div>
+          )}
 
           {nvdTest.data && (
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">

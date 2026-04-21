@@ -481,6 +481,14 @@ export interface NvdTestResponse {
   }[];
 }
 
+export interface NvdGenerateAlertsResponse {
+  status: string;
+  alerts_created: number;
+  total_asset_vuln_links: number;
+  existing_vuln_alerts: number;
+  message: string;
+}
+
 // ── Auth ───────────────────────────────────────────────────────────
 
 export interface LoginResponse {
@@ -583,6 +591,7 @@ export const api = {
   nvdSave: (api_key: string) => request<NvdMutationResponse>('POST', '/integrations/nvd', { api_key }),
   nvdSync: () => request<NvdMutationResponse>('POST', '/integrations/nvd/sync'),
   nvdTest: () => request<NvdTestResponse>('POST', '/integrations/nvd/test'),
+  nvdGenerateAlerts: () => request<NvdGenerateAlertsResponse>('POST', '/integrations/nvd/generate-alerts'),
 
   // Reports
   reportSubnets: () =>
