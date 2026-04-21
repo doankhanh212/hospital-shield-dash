@@ -1,7 +1,7 @@
 # HQG Security Platform — Tài liệu Kỹ thuật
 
 > **Hospital Shield Dash — Passive Asset Intelligence Platform**
-> Cập nhật: 2026-04-17
+> Cập nhật: 2026-04-21
 > Mục đích: Giám sát thụ động (passive) toàn bộ tài sản mạng bệnh viện, phân loại thiết bị (IoMT/IoT/Workstation/Server/Network/Printer/IP Camera) và phát hiện rủi ro mà **không** gửi gói tin chủ động.
 
 ---
@@ -25,6 +25,7 @@
 15. [Cấu hình & deployment](#15-cấu-hình--deployment)
 16. [Vận hành & kiểm chứng](#16-vận-hành--kiểm-chứng)
 17. [Các hạn chế đã biết](#17-các-hạn-chế-đã-biết)
+18. [Xu hướng phát triển: XDR và NAC](#18-xu-hướng-phát-triển-xdr-và-nac)
 
 ---
 
@@ -267,12 +268,25 @@ Engine:
 
 ### 4.3. Alert generation
 
+Hệ thống hiện có 2 nhánh sinh cảnh báo:
+
+**Nhánh 1 — alert từ ingestion/runtime**
+
 Sau ingestion, `scan_service.py` gọi `_generate_alerts()` với 3 rule:
 1. **new_asset** — thiết bị mới phát hiện lần đầu
 2. **suspicious_port** — port nguy hiểm (23/telnet, 445/SMB, 3389/RDP...)
 3. **external_iot_connection** — IoT/IoMT kết nối ra ngoài LOCAL_SUBNETS
 
-Alert được dedup theo `(alert_type, source_ip, hour)` qua unique index `uq_alerts_dedup`.
+Alert nhóm này được dedup theo `(alert_type, source_ip, hour)` qua unique index `uq_alerts_dedup`.
+
+**Nhánh 2 — alert từ NVD/CVE**
+
+Sau khi NVD sync tạo `asset_vulnerabilities`, hệ thống có thể sinh thêm alert loại `vulnerability`:
+1. map `cvss_score` → severity `Critical/High/Medium/Low`
+2. tạo message dạng `CVE-XXXX (CVSS X.Y): description`
+3. dedup theo `asset_id + vulnerability_id` trong `alerts.metadata`
+
+Nhánh này được kích hoạt qua `POST /api/integrations/nvd/generate-alerts` để tách rõ bước đồng bộ CVE và bước sinh cảnh báo vận hành.
 
 ### 4.4. Frontend pull cycle
 
@@ -618,8 +632,11 @@ Base URL: `http://localhost:3001/api`. Toàn bộ route bảo vệ bằng JWT (t
 | POST | `/scan/stop` | Dừng scan | admin |
 | POST | `/scan/restart` | Restart scan | admin |
 | GET | `/scan/status` | Trạng thái + metric (logs_processed, assets_discovered) | analyst+ |
+| POST | `/integrations/nvd` | Lưu NVD API key + trigger background sync đầu tiên | admin |
 | GET | `/integrations/nvd` | NVD config + last sync | admin |
-| POST | `/integrations/nvd/sync` | Trigger NVD CVE sync | admin |
+| POST | `/integrations/nvd/sync` | Trigger NVD CVE full sync ở background | admin |
+| POST | `/integrations/nvd/test` | Test nhanh NVD trên tối đa 3 CPE | admin |
+| POST | `/integrations/nvd/generate-alerts` | Sinh alert `vulnerability` từ dữ liệu CVE đã link | admin |
 | POST | `/generator/run` | Tạo demo Zeek TSV data | admin |
 | GET | `/generator/status` | Trạng thái generator | admin |
 
@@ -1026,9 +1043,15 @@ const { data, isLoading } = useAssets(apiParams);
 ```
 inference_results.cpe ──▶ NVD API v2.0 ──▶ CVE matches
                                                │
-                                               ▼
-                                    UPSERT vulnerabilities
-                                    UPSERT asset_vulnerabilities
+                              ┌────────────────┴────────────────┐
+                              ▼                                 ▼
+                   UPSERT vulnerabilities             UPSERT asset_vulnerabilities
+                                                                  │
+                                                                  ▼
+                                          POST /api/integrations/nvd/generate-alerts
+                                                                  │
+                                                                  ▼
+                                                alerts (alert_type='vulnerability')
 ```
 
 ### 13.2. Service
@@ -1039,16 +1062,23 @@ inference_results.cpe ──▶ NVD API v2.0 ──▶ CVE matches
 - Parse CVSS v3.1 score + severity + description
 - Upsert vào `vulnerabilities` (dedup bởi `cve_id`)
 - Link asset ↔ vulnerability qua `asset_vulnerabilities`
+- Full sync chạy ở background task để tránh block UI
+- Có test mode sync đồng bộ, giới hạn 3 CPE và timeout 90s
+- Có endpoint riêng để generate `vulnerability alerts` từ dữ liệu CVE đã link
 
 ### 13.3. API Endpoints
 
+- `POST /api/integrations/nvd` — lưu API key và trigger background sync đầu tiên
 - `GET /api/integrations/nvd` — trả config + last_sync_at
-- `POST /api/integrations/nvd/sync` — trigger sync (blocking, có thể vài phút)
+- `POST /api/integrations/nvd/sync` — trigger full sync ở background
+- `POST /api/integrations/nvd/test` — probe nhanh tối đa 3 CPE, trả sample CVE để kiểm chứng realtime
+- `POST /api/integrations/nvd/generate-alerts` — sinh cảnh báo `vulnerability` từ `asset_vulnerabilities`
 
 ### 13.4. Frontend
 
-`AdminIntegrationsPage` hiển thị NVD API key config, runtime status cards, sync button.
+`AdminIntegrationsPage` hiển thị NVD API key config, runtime status cards, nút `Lưu key`, `Đồng bộ`, `Test CVE`, `Tạo cảnh báo`.
 `VulnerabilitiesPage` hiển thị CVE list với severity cards.
+`AlertsPage` hiển thị kết quả sau khi `generate-alerts` tạo các alert loại `vulnerability`.
 
 ---
 
@@ -1160,7 +1190,27 @@ npm run build     # → dist/ static files (Vite)
 # Deploy: serve dist/ qua nginx, proxy /api → backend uvicorn
 ```
 
-### 15.5. Vite proxy config
+Cho môi trường VPS/Docker, cách bootstrap chuẩn hiện tại là dùng `setup.sh` thay vì build tay từng service.
+
+### 15.5. One-command VPS deployment
+
+```bash
+./setup.sh --reset
+```
+
+Script này thực hiện end-to-end:
+- dọn stack cũ của project (`down -v --remove-orphans`)
+- xoá volume Postgres cũ khi reset
+- cleanup Docker state + builder cache của riêng project
+- pre-pull base images, build lại với `--pull --no-cache`, retry 1 lần nếu build lỗi
+- `up -d --force-recreate --remove-orphans`
+- chờ cả API `:3001/health` và Web UI `http://localhost/` sẵn sàng
+- tạo tài khoản admin
+- nếu có `./logs/*.log` thì stage sang `./zeek-logs` rồi chạy ingest + inference
+
+Mục tiêu của `setup.sh` là để operator chỉ cần 1 lệnh cho vòng đời `cleanup → rebuild → run → verify`.
+
+### 15.6. Vite proxy config
 
 `vite.config.ts`:
 - Dev port: `8080`
@@ -1254,7 +1304,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 6. **JWT không revoke được** — token compromise phải chờ hết hạn 24h.
 
-7. **NVD sync blocking** — `/integrations/nvd/sync` block request cho tới khi xong (vài phút). Cần background task.
+7. **NVD sync eventual consistency** — `/integrations/nvd/sync` hiện chạy background nên UI không có progress/job tracking chi tiết; trong trường hợp sync bị gián đoạn giữa chừng, analyst có thể phải chạy lại `POST /integrations/nvd/generate-alerts` để đồng bộ phần alerts với `asset_vulnerabilities`.
 
 8. **Frontend chưa có refresh chủ động** — `refetchOnWindowFocus=false`, dữ liệu không tự cập nhật. User phải bấm "Làm mới".
 
@@ -1263,6 +1313,114 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 10. **Rule coverage** — ~180 rules chưa phủ hết hãng thiết bị y tế Việt Nam. Cần mở rộng theo dữ liệu thực tế.
 
 11. **Viewer role chưa enforce** — role `viewer` được định nghĩa nhưng backend chưa phân biệt với analyst.
+
+---
+
+## 18. Xu hướng phát triển: XDR và NAC
+
+### 18.1. Vị trí hiện tại của nền tảng
+
+Ở trạng thái hiện tại, Hospital Shield Dash là một nền tảng **Passive Asset Intelligence + Network Detection Context**:
+- có inventory tương đối đầy đủ của tài sản mạng nội bộ
+- có identity/profile theo MAC, IP, hostname, JA3/JA3S, DNS, HTTP, DHCP
+- có inference để phân loại thiết bị và gán confidence
+- có alert runtime và alert từ CVE/NVD
+
+Đây là nền tảng dữ liệu rất phù hợp để phát triển lên 2 hướng lớn hơn:
+1. **XDR** — mở rộng từ quan sát mạng sang tương quan đa nguồn và response.
+2. **NAC** — mở rộng từ nhận diện thụ động sang policy kiểm soát truy cập mạng.
+
+Điểm quan trọng: với môi trường bệnh viện, hướng đi nên là **passive-first, recommendation-first** trước khi tiến tới enforcement tự động.
+
+### 18.2. Xu hướng phát triển theo hướng XDR
+
+**XDR (Extended Detection and Response)** là bước phát triển tự nhiên khi hệ thống không chỉ trả lời câu hỏi "thiết bị nào đang tồn tại" mà còn trả lời thêm:
+- thiết bị đó liên quan đến user nào
+- đang phát sinh hành vi gì bất thường trên nhiều lớp
+- cùng một sự kiện có xuất hiện trên endpoint, identity, firewall, email hay cloud không
+- nên phản ứng thế nào và ai phải phê duyệt
+
+Với codebase hiện tại, nền tảng có thể đóng vai trò **network-native telemetry layer** cho XDR. Các bước mở rộng hợp lý:
+
+1. **Chuẩn hoá multi-source telemetry**
+  - ingest thêm log từ EDR, Windows Event, AD/LDAP, VPN, firewall, proxy, email gateway
+  - đưa về một schema chung theo `asset`, `user`, `session`, `destination`, `indicator`
+
+2. **Correlation engine / incident engine**
+  - gom alert rời rạc thành incident theo thực thể và time window
+  - map sang MITRE ATT&CK technique nếu đủ signal
+  - tạo timeline: network flow → DNS → TLS → CVE → auth event → analyst action
+
+3. **Entity graph và risk propagation**
+  - nối `asset ↔ user ↔ subnet ↔ service ↔ CVE ↔ external destination`
+  - khi một asset có CVE nghiêm trọng và đồng thời phát sinh kết nối đáng ngờ, risk score phải tăng theo ngữ cảnh chứ không chỉ theo từng tín hiệu riêng lẻ
+
+4. **Response workflow**
+  - giai đoạn đầu: chỉ đưa ra khuyến nghị xử lý
+  - giai đoạn sau: playbook bán tự động như mở ticket, gắn tag, gọi webhook, push SIEM/SOAR
+
+**Khuyến nghị kiến trúc cho XDR:**
+- tách event ingestion khỏi request/response API bằng queue hoặc background workers
+- bổ sung bảng `incidents`, `incident_entities`, `alert_history`, `response_actions`
+- thêm audit trail đầy đủ cho analyst workflow
+- thêm rule engine có versioning và test fixtures
+
+### 18.3. Xu hướng phát triển theo hướng NAC
+
+**NAC (Network Access Control)** là lớp tiếp theo sau asset visibility. Nếu XDR tập trung vào detection/response đa nguồn, thì NAC tập trung vào câu hỏi:
+"Thiết bị này có nên được vào mạng nào, với mức truy cập nào, và khi rủi ro tăng thì có cần cô lập hay không?"
+
+Trong bối cảnh bệnh viện, NAC không nên triển khai theo kiểu chặn mạnh ngay từ đầu. Lộ trình an toàn hơn:
+
+1. **Discovery mode**
+  - chỉ quan sát, profile và phân nhóm thiết bị
+  - gợi ý chính sách VLAN/ACL nhưng chưa enforce
+
+2. **Advisory mode**
+  - sinh policy recommendation theo loại thiết bị: IoMT, Workstation, Server, Printer, Camera
+  - ví dụ: máy chẩn đoán hình ảnh chỉ nên nói chuyện với PACS, HIS, domain controller, NTP, DNS
+
+3. **Controller integration mode**
+  - tích hợp với Cisco ISE, Aruba ClearPass, FortiNAC hoặc controller nội bộ
+  - sử dụng RADIUS CoA, dynamic VLAN, downloadable ACL, quarantine VLAN hoặc restricted role
+
+4. **Closed-loop enforcement mode**
+  - chỉ áp dụng cho nhóm thiết bị có confidence cao và có quy trình phê duyệt
+  - với IoMT/medical devices, enforcement nên có allowlist, maintenance window và rollback plan rõ ràng
+
+**Năng lực cần bổ sung trước khi tiến lên NAC:**
+- asset criticality: thiết bị nào là clinical-critical, life-support, lab, imaging, admin
+- ownership/site context: thiết bị thuộc khoa nào, switch nào, VLAN nào, rack nào
+- confidence threshold cho policy: chỉ enforce khi classification đủ tin cậy
+- exception registry cho thiết bị legacy/fragile
+- audit log để biết ai đã approve/quarantine/restore thiết bị nào
+
+### 18.4. Lộ trình khuyến nghị cho repo này
+
+Lộ trình thực tế, ít rủi ro vận hành nhất:
+
+**Phase 1 — củng cố nền tảng hiện tại**
+- audit log cho asset, alert, admin actions
+- background job tracking cho NVD sync / ingest / inference
+- incident-ready schema thay vì chỉ có alert rời rạc
+- asset criticality, location, department, owner
+
+**Phase 2 — XDR-ready**
+- ingest thêm identity/auth/firewall/EDR logs
+- incident correlation + timeline UI
+- webhook/SIEM export + playbook actions
+
+**Phase 3 — NAC advisory**
+- policy recommendation theo device type và risk level
+- simulation mode: nếu enforce thì thiết bị nào sẽ bị ảnh hưởng
+- approval workflow cho isolate / restrict / restore
+
+**Phase 4 — NAC enforcement có kiểm soát**
+- tích hợp controller NAC thực tế
+- apply policy theo nhóm nhỏ trước
+- rollback + exception path cho IoMT quan trọng
+
+Kết luận kỹ thuật: repo hiện tại đã là một nền tốt để đi lên **NDR-context → XDR-context → NAC advisory → NAC enforcement**, nhưng cần giữ nguyên nguyên tắc cốt lõi là **không làm gián đoạn hệ thống y tế chỉ vì một classifier hoặc một alert có confidence chưa đủ cao**.
 
 ---
 
