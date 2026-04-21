@@ -23,6 +23,7 @@ _SORT_MAP: dict[str, str] = {
     "last_seen":       "ad.last_seen DESC",
     "ip":              "ad.ip ASC NULLS LAST",
     "device_type":     "ad.device_type ASC",
+    "max_cvss_desc":   "ad.max_cvss DESC, ad.vuln_count DESC",
 }
 _DEFAULT_SORT = "confidence_desc"
 
@@ -38,6 +39,7 @@ async def list_assets(
     status: Optional[str] = Query(None),
     vendor: Optional[str] = Query(None),
     has_anomaly: Optional[bool] = Query(None),
+    has_vuln: Optional[bool] = Query(None),
     min_confidence: Optional[float] = Query(None, ge=0, le=100),
     max_confidence: Optional[float] = Query(None, ge=0, le=100),
     conn: asyncpg.Connection = Depends(get_conn),
@@ -108,6 +110,11 @@ async def list_assets(
             outer_wheres.append("ad.anomaly_count > 0")
         elif has_anomaly is False:
             outer_wheres.append("ad.anomaly_count = 0")
+
+        if has_vuln is True:
+            outer_wheres.append("ad.vuln_count > 0")
+        elif has_vuln is False:
+            outer_wheres.append("ad.vuln_count = 0")
 
         outer_where_sql = (" AND " + " AND ".join(outer_wheres)) if outer_wheres else ""
 

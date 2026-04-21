@@ -378,6 +378,7 @@ async def seed(target_assets: int = 60) -> None:
                         INSERT INTO alerts (id, alert_type, severity, message,
                                             asset_id, status)
                         VALUES ($1, $2, $3, $4, $5, 'new')
+                        ON CONFLICT ON CONSTRAINT uq_alerts_dedup DO NOTHING
                         """,
                         uuid.uuid4(), atype, sev, msg, sample_asset_id,
                     )

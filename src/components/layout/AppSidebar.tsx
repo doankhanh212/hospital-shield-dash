@@ -16,7 +16,7 @@ const monitoringMenu = [
 
 // PHÂN TÍCH — investigation surface
 const analysisMenu = [
-  { path: '/alerts',    icon: Bell,       label: 'Cảnh báo', badge: 4 },
+  { path: '/alerts',    icon: Bell,       label: 'Cảnh báo' },
   { path: '/logs',      icon: ScrollText, label: 'Nhật ký' },
 ];
 

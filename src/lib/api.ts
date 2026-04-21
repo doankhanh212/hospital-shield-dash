@@ -330,6 +330,7 @@ export interface AssetFilterParams {
   status?: string;
   vendor?: string;
   has_anomaly?: boolean;
+  has_vuln?: boolean;
   min_confidence?: number;
   max_confidence?: number;
 }
@@ -360,8 +361,10 @@ export interface PaginatedAlerts {
 }
 
 export interface AlertCounts {
+  total?: number;
   by_status: { status: string; count: number }[];
   by_severity: { severity: string; count: number }[];
+  critical_vulns_active?: number;
 }
 
 // ── Vulnerabilities ────────────────────────────────────────────────

@@ -113,7 +113,7 @@ const LoginPage = () => {
           </button>
 
           <p className="text-center text-[11px] text-muted-foreground">
-            Mặc định: <span className="font-mono">admin</span> / <span className="font-mono">changeme</span>
+            Liên hệ quản trị viên nếu quên mật khẩu
           </p>
         </form>
       </div>

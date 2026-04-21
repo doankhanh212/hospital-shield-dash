@@ -138,6 +138,18 @@ if [[ ! -f .env ]]; then
     mkdir -p ./zeek-logs
 
     ok "Generated .env (DB password + JWT secret + CORS + LOCAL_SUBNETS=$LOCAL_SUBNETS)"
+
+    # A brand-new .env means a brand-new DB_PASSWORD. Any existing Postgres
+    # volume was initialised with a DIFFERENT password, so Postgres will
+    # reject the app's connection with "password authentication failed".
+    # Force-remove the stale volume now so Postgres re-initialises cleanly.
+    PG_VOL_NAME="$(basename "$PWD" | tr -cd '[:alnum:]_-')_pgdata"
+    if docker volume inspect "$PG_VOL_NAME" >/dev/null 2>&1; then
+        warn "Found stale Postgres volume from previous run — removing so new DB_PASSWORD takes effect"
+        $COMPOSE down -v 2>/dev/null || true
+        docker volume rm -f "$PG_VOL_NAME" >/dev/null 2>&1 || true
+        ok "Removed stale volume $PG_VOL_NAME"
+    fi
 else
     ok ".env already exists — leaving it alone"
     mkdir -p ./zeek-logs
@@ -150,6 +162,24 @@ mkdir -p ./zeek-logs
 if [[ "$DO_RESET" -eq 1 ]]; then
     log "Resetting — bringing stack down + removing postgres volume"
     $COMPOSE down -v || true
+fi
+
+# ── 3a. Detect stale Postgres volume (password mismatch) ────────────────────
+# If a pgdata volume exists from a previous run but the DB_PASSWORD in .env
+# no longer matches what Postgres was initialised with, the app container
+# will crash with "password authentication failed". Auto-detect & auto-reset.
+PG_VOL_NAME="$(basename "$PWD" | tr -cd '[:alnum:]_-')_pgdata"
+if docker volume inspect "$PG_VOL_NAME" >/dev/null 2>&1; then
+    CURRENT_DB_PASS="$(grep -E '^DB_PASSWORD=' .env | head -n1 | cut -d= -f2-)"
+    # Quick probe: try to auth against the running postgres container (if any)
+    if $COMPOSE ps postgres 2>/dev/null | grep -q Up; then
+        if ! $COMPOSE exec -T -e PGPASSWORD="$CURRENT_DB_PASS" postgres \
+                psql -U "${DB_USER:-postgres}" -d "${DB_NAME:-passive_asset_intel}" -c 'SELECT 1' >/dev/null 2>&1; then
+            warn "Existing Postgres volume has a different password than .env"
+            warn "Auto-resetting the DB volume so new password takes effect"
+            $COMPOSE down -v || true
+        fi
+    fi
 fi
 
 # ── 3b. Cleanup stale Docker state ──────────────────────────────────────────
@@ -232,14 +262,32 @@ $COMPOSE exec -T app python -m passive_asset_intel.scripts.create_admin \
     --role admin
 ok "Admin account ready"
 
-# ── 7. Seed mock data ───────────────────────────────────────────────────────
+# ── 7. Ingest data ──────────────────────────────────────────────────────────
+# Uu tien: neu co thu muc ./logs voi Zeek logs thuc -> ingest + infer
+# Fallback: seed_mock_data (random)
 if [[ "$DO_SEED" -eq 1 ]]; then
-    log "Seeding mock hospital-network data ($TARGET_ASSETS assets)"
-    $COMPOSE exec -T app python -m passive_asset_intel.scripts.seed_mock_data \
-        --assets "$TARGET_ASSETS"
-    ok "Mock data seeded"
+    # Copy real Zeek logs into the bind-mount folder if the user shipped any
+    if [[ -d ./logs ]] && ls ./logs/conn.log* >/dev/null 2>&1; then
+        log "Copying Zeek logs from ./logs to ./zeek-logs (bind mount)"
+        # Use cp -n to avoid overwriting anything already in zeek-logs
+        cp -n ./logs/*.log ./zeek-logs/ 2>/dev/null || true
+        # Also copy any rotated .log.gz files the parsers understand
+        cp -n ./logs/*.log.gz ./zeek-logs/ 2>/dev/null || true
+        ok "Zeek logs staged in ./zeek-logs"
+
+        log "Ingesting Zeek logs + running inference (can take a few minutes on 24MB conn.log)"
+        $COMPOSE exec -T -e ZEEK_LOG_DIR=/logs app \
+            python -m passive_asset_intel run-all --log-dir /logs || \
+            warn "Ingest step reported errors — check 'docker compose logs app' for details"
+        ok "Real Zeek logs ingested + classified"
+    else
+        log "No ./logs folder found — falling back to synthetic mock data ($TARGET_ASSETS assets)"
+        $COMPOSE exec -T app python -m passive_asset_intel.scripts.seed_mock_data \
+            --assets "$TARGET_ASSETS"
+        ok "Mock data seeded"
+    fi
 else
-    warn "Skipping mock-data seed (--no-seed)"
+    warn "Skipping data ingest (--no-seed)"
 fi
 
 # ── 8. Summary ──────────────────────────────────────────────────────────────

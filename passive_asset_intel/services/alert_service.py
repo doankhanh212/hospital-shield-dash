@@ -168,7 +168,13 @@ async def update_alert_status(
 
 
 async def get_alert_counts(conn: asyncpg.Connection) -> dict:
-    """Return alert counts grouped by status and severity."""
+    """Return alert counts grouped by status and severity.
+
+    Also returns ``critical_vulns_active`` — the number of vulnerability alerts
+    with severity=critical whose status is NOT ``false_positive`` (and not
+    ``resolved``). Used by the Dashboard "Nghiêm trọng" card so analysts can
+    suppress false-positive CVEs by marking them on the Alerts page.
+    """
     rows = await conn.fetch("""
         SELECT status, severity, COUNT(*)::int AS count
         FROM alerts
@@ -182,9 +188,16 @@ async def get_alert_counts(conn: asyncpg.Connection) -> dict:
         sev_key = (r["severity"] or "").lower()
         by_severity[sev_key] = by_severity.get(sev_key, 0) + r["count"]
 
+    critical_vulns_active = await conn.fetchval("""
+        SELECT COUNT(*)::int FROM alerts
+        WHERE LOWER(severity) = 'critical'
+          AND status NOT IN ('false_positive', 'resolved')
+    """) or 0
+
     # Frontend expects arrays of {status, count} / {severity, count}
     return {
         "total": sum(by_status.values()),
         "by_status": [{"status": k, "count": v} for k, v in by_status.items()],
         "by_severity": [{"severity": k, "count": v} for k, v in by_severity.items()],
+        "critical_vulns_active": critical_vulns_active,
     }
