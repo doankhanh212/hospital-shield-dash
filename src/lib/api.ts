@@ -484,6 +484,7 @@ export interface NvdTestResponse {
 export interface NvdGenerateAlertsResponse {
   status: string;
   alerts_created: number;
+  rows_found?: number;
   total_asset_vuln_links: number;
   existing_vuln_alerts: number;
   message: string;

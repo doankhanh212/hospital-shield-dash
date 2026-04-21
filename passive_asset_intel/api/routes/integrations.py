@@ -144,46 +144,126 @@ async def generate_vuln_alerts(
 ):
     """Synchronously generate vulnerability alerts for all asset-CVE links.
 
-    Useful when the background NVD sync linked CVEs to assets but was
-    interrupted before creating alerts, or when re-running alert generation
-    after reviewing false positives.
-
-    Returns the number of *new* alerts created (existing ones are skipped).
+    Inlines the alert-generation logic with proper error propagation (no
+    silent exception swallowing) and batched inserts (100 per batch).
     """
-    try:
-        config = await get_nvd_config(pool)
-        if not config or not config.get("api_key"):
-            raise HTTPException(
-                status_code=400,
-                detail="NVD API key not configured.",
+    import json as _json
+    import uuid as _uuid
+
+    config = await get_nvd_config(pool)
+    if not config or not config.get("api_key"):
+        raise HTTPException(status_code=400, detail="NVD API key not configured.")
+
+    async with pool.acquire() as conn:
+        total_links = await conn.fetchval(
+            "SELECT COUNT(*) FROM asset_vulnerabilities"
+        ) or 0
+        existing_alerts = await conn.fetchval(
+            "SELECT COUNT(*) FROM alerts WHERE alert_type = 'vulnerability'"
+        ) or 0
+
+        # Fetch all asset-vuln pairs that don't yet have an alert
+        rows = await conn.fetch("""
+            SELECT
+                av.asset_id::text       AS asset_id,
+                av.vulnerability_id::text AS vulnerability_id,
+                v.cve_id,
+                v.cvss_score,
+                v.description,
+                COALESCE(host(ai.ip_address)::text, '') AS ip
+            FROM asset_vulnerabilities av
+            JOIN vulnerabilities v ON v.id = av.vulnerability_id
+            LEFT JOIN asset_ips ai
+                ON ai.asset_id = av.asset_id AND ai.is_primary = true
+            WHERE NOT EXISTS (
+                SELECT 1 FROM alerts a
+                WHERE a.alert_type = 'vulnerability'
+                  AND a.asset_id::text = av.asset_id::text
+                  AND a.metadata->>'vulnerability_id' = av.vulnerability_id::text
             )
+        """)
 
-        from passive_asset_intel.services.nvd_service import _generate_vuln_alerts  # noqa: PLC0415
+        rows_found = len(rows)
+        if not rows:
+            return {
+                "status": "ok",
+                "alerts_created": 0,
+                "rows_found": 0,
+                "total_asset_vuln_links": total_links,
+                "existing_vuln_alerts": existing_alerts,
+                "message": "Không có cảnh báo mới (tất cả đã tồn tại hoặc không có dữ liệu CVE).",
+            }
 
-        # Check how many asset-vuln links exist first
-        async with pool.acquire() as conn:
-            total_links = await conn.fetchval(
-                "SELECT COUNT(*) FROM asset_vulnerabilities"
-            ) or 0
-            existing_alerts = await conn.fetchval(
-                "SELECT COUNT(*) FROM alerts WHERE alert_type = 'vulnerability'"
-            ) or 0
+        # Build alert tuples
+        alert_rows: list[tuple] = []
+        for r in rows:
+            score = float(r["cvss_score"] or 0)
+            if score >= 9.0:
+                sev = "Critical"
+            elif score >= 7.0:
+                sev = "High"
+            elif score >= 4.0:
+                sev = "Medium"
+            else:
+                sev = "Low"
 
-        alerts_created = await _generate_vuln_alerts(pool)
+            desc = (r["description"] or "").strip().replace("\n", " ")
+            if len(desc) > 200:
+                desc = desc[:200] + "..."
+            cve_id = r["cve_id"] or "CVE-UNKNOWN"
+            msg = f"{cve_id} (CVSS {score:.1f}): {desc}" if desc else f"{cve_id} (CVSS {score:.1f})"
+            source_ip: str | None = r["ip"] if r["ip"] else None
 
-        return {
-            "status": "ok",
-            "alerts_created": alerts_created,
-            "total_asset_vuln_links": total_links,
-            "existing_vuln_alerts": existing_alerts,
-            "message": f"{alerts_created} cảnh báo mới được tạo." if alerts_created else "Không có cảnh báo mới (có thể tất cả đã tồn tại hoặc không có dữ liệu CVE).",
-        }
-    except HTTPException:
-        raise
-    except asyncpg.PostgresError as e:
-        raise HTTPException(status_code=500, detail={"error": str(e), "type": "database"})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={"error": str(e), "type": "internal"})
+            alert_rows.append((
+                str(_uuid.uuid4()),      # id as text — cast in SQL
+                "vulnerability",         # alert_type
+                sev,                     # severity
+                msg,                     # message
+                source_ip,               # source_ip (varchar)
+                r["asset_id"],           # asset_id as text — cast in SQL
+                _json.dumps({            # metadata (jsonb)
+                    "cve_id": cve_id,
+                    "vulnerability_id": r["vulnerability_id"],
+                    "cvss_score": score,
+                }),
+            ))
+
+        # Batch insert — 200 rows per batch to stay within asyncpg limits
+        BATCH = 200
+        total_inserted = 0
+        for i in range(0, len(alert_rows), BATCH):
+            batch = alert_rows[i: i + BATCH]
+            await conn.executemany("""
+                INSERT INTO alerts
+                    (id, alert_type, severity, message,
+                     source_ip, asset_id, metadata,
+                     status, created_at, updated_at)
+                VALUES (
+                    $1::uuid, $2, $3, $4,
+                    $5, $6::uuid, $7::jsonb,
+                    'new', NOW(), NOW()
+                )
+                ON CONFLICT DO NOTHING
+            """, batch)
+            total_inserted += len(batch)
+
+    return {
+        "status": "ok",
+        "alerts_created": len(alert_rows),
+        "rows_found": rows_found,
+        "total_asset_vuln_links": total_links,
+        "existing_vuln_alerts": existing_alerts,
+        "message": f"{len(alert_rows)} cảnh báo mới được tạo từ {rows_found} liên kết CVE.",
+    }
+
+
+async def _run_sync(pool: asyncpg.Pool) -> None:
+    """Background task wrapper for NVD sync."""
+    try:
+        await sync_nvd_for_all_cpes(pool)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Background NVD sync failed")
 
 
 async def _run_sync(pool: asyncpg.Pool) -> None:

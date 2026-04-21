@@ -242,10 +242,14 @@ const AdminIntegrationsPage = () => {
                   </span>
                 )}
               </div>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-4">
                 <div className="rounded-md border border-border bg-card px-3 py-2">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cảnh báo mới tạo</div>
                   <div className="mt-1 text-sm font-semibold text-amber-400">{nvdGenerateAlerts.data.alerts_created}</div>
+                </div>
+                <div className="rounded-md border border-border bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Chưa có cảnh báo</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{nvdGenerateAlerts.data.rows_found ?? '—'}</div>
                 </div>
                 <div className="rounded-md border border-border bg-card px-3 py-2">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Liên kết CVE tổng</div>
