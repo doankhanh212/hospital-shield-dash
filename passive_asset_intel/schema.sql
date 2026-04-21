@@ -249,12 +249,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_connections_flow
         date_trunc('minute', COALESCE(timestamp, '1970-01-01'::timestamp))
     );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_alerts_dedup
+DROP INDEX IF EXISTS uq_alerts_dedup;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_alerts_runtime_dedup
     ON alerts (
         alert_type,
         COALESCE(source_ip, ''),
         date_trunc('hour', created_at)
-    );
+    )
+    WHERE alert_type <> 'vulnerability';
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_alerts_vulnerability_dedup
+    ON alerts (
+        alert_type,
+        asset_id,
+        COALESCE(metadata->>'vulnerability_id', '')
+    )
+    WHERE alert_type = 'vulnerability';
 
 CREATE INDEX IF NOT EXISTS idx_assets_last_seen ON assets (last_seen DESC);
 CREATE INDEX IF NOT EXISTS idx_connections_timestamp ON connections (timestamp DESC);

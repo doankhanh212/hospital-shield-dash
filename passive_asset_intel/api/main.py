@@ -29,6 +29,7 @@ from passive_asset_intel.api.routes import (
     vulnerabilities,
 )
 from passive_asset_intel.api.routes import auth as auth_routes
+from passive_asset_intel.db.schema_fixes import ensure_alert_indexes
 from passive_asset_intel.generator.api_routes import router as generator_router
 from passive_asset_intel.services.disk_manager import DiskManager
 from passive_asset_intel.services.scan_service import ScanService
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
         max_size=config.db_pool_max,
         statement_cache_size=0,
     )
+    await ensure_alert_indexes(pool)
     app.state.pool = pool
     app.state.config = config
     app.state.scan_service = ScanService(pool, config)

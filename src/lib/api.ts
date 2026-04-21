@@ -487,6 +487,7 @@ export interface NvdGenerateAlertsResponse {
   rows_found?: number;
   total_asset_vuln_links: number;
   existing_vuln_alerts: number;
+  total_vuln_alerts_after?: number;
   message: string;
 }
 

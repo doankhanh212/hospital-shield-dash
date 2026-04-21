@@ -256,8 +256,10 @@ const AdminIntegrationsPage = () => {
                   <div className="mt-1 text-sm font-semibold text-foreground">{nvdGenerateAlerts.data.total_asset_vuln_links}</div>
                 </div>
                 <div className="rounded-md border border-border bg-card px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cảnh báo CVE hiện có</div>
-                  <div className="mt-1 text-sm font-semibold text-foreground">{nvdGenerateAlerts.data.existing_vuln_alerts}</div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tổng alert CVE</div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">
+                    {nvdGenerateAlerts.data.total_vuln_alerts_after ?? nvdGenerateAlerts.data.existing_vuln_alerts}
+                  </div>
                 </div>
               </div>
               <p className="mt-2 text-[11px] text-muted-foreground">{nvdGenerateAlerts.data.message}</p>

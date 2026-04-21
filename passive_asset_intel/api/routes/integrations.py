@@ -230,7 +230,6 @@ async def generate_vuln_alerts(
 
         # Batch insert — 200 rows per batch to stay within asyncpg limits
         BATCH = 200
-        total_inserted = 0
         for i in range(0, len(alert_rows), BATCH):
             batch = alert_rows[i: i + BATCH]
             await conn.executemany("""
@@ -245,15 +244,21 @@ async def generate_vuln_alerts(
                 )
                 ON CONFLICT DO NOTHING
             """, batch)
-            total_inserted += len(batch)
+
+        total_alerts_after = await conn.fetchval(
+            "SELECT COUNT(*) FROM alerts WHERE alert_type = 'vulnerability'"
+        ) or 0
+
+    actual_inserted = max(0, int(total_alerts_after) - int(existing_alerts))
 
     return {
         "status": "ok",
-        "alerts_created": len(alert_rows),
+        "alerts_created": actual_inserted,
         "rows_found": rows_found,
         "total_asset_vuln_links": total_links,
         "existing_vuln_alerts": existing_alerts,
-        "message": f"{len(alert_rows)} cảnh báo mới được tạo từ {rows_found} liên kết CVE.",
+        "total_vuln_alerts_after": total_alerts_after,
+        "message": f"{actual_inserted} cảnh báo mới được tạo từ {rows_found} liên kết CVE.",
     }
 
 
