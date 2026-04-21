@@ -30,7 +30,13 @@ RUN apt-get update && \
 
 # Install Python dependencies
 COPY passive_asset_intel/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    python -m pip install \
+        --no-cache-dir \
+        --retries 5 \
+        --timeout 120 \
+        --index-url https://pypi.org/simple \
+        -r requirements.txt
 
 # Copy the backend application
 COPY passive_asset_intel/ ./passive_asset_intel/
