@@ -81,17 +81,17 @@ const NetworkMiniMap = ({ anomalies, selectedAssetId, onSelectAsset }: Props) =>
     <div className="rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-          Network Map
+          Bản đồ mạng
         </h2>
         <span className="text-[10px] text-muted-foreground">
-          {nodes.length} active asset{nodes.length === 1 ? '' : 's'}
+          {nodes.length} tài sản đang cảnh báo
         </span>
       </div>
 
       {!hasData ? (
         <EmptyState
-          title="No assets in alert state"
-          description="Assets will appear here as soon as the pipeline detects anomalous behaviour."
+          title="Không có tài sản nào đang cảnh báo"
+          description="Tài sản sẽ xuất hiện ngay khi pipeline phát hiện hành vi bất thường."
         />
       ) : (
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="h-[340px] w-full">

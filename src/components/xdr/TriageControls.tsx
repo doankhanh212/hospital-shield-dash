@@ -17,10 +17,10 @@ interface Props {
 }
 
 const BUTTONS: { status: TriageStatus; label: string; icon: typeof Search; cls: string }[] = [
-  { status: 'investigating',  label: 'Investigating', icon: Search,         cls: 'border-medium/40 text-medium hover:bg-medium/15' },
-  { status: 'escalated',      label: 'Escalate',      icon: AlertTriangle,  cls: 'border-high/40   text-high   hover:bg-high/15' },
-  { status: 'resolved',       label: 'Resolve',       icon: CheckCircle2,   cls: 'border-success/40 text-success hover:bg-success/15' },
-  { status: 'false_positive', label: 'False Positive',icon: ShieldOff,      cls: 'border-border    text-muted-foreground hover:bg-muted/30' },
+  { status: 'investigating',  label: 'Đang điều tra', icon: Search,         cls: 'border-medium/40 text-medium hover:bg-medium/15' },
+  { status: 'escalated',      label: 'Leo thang',     icon: AlertTriangle,  cls: 'border-high/40   text-high   hover:bg-high/15' },
+  { status: 'resolved',       label: 'Đã xử lý',      icon: CheckCircle2,   cls: 'border-success/40 text-success hover:bg-success/15' },
+  { status: 'false_positive', label: 'Báo nhầm',      icon: ShieldOff,      cls: 'border-border    text-muted-foreground hover:bg-muted/30' },
 ];
 
 const TriageControls = ({ anomalyId, assetId, current }: Props) => {
@@ -30,7 +30,7 @@ const TriageControls = ({ anomalyId, assetId, current }: Props) => {
   return (
     <div>
       <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Triage Actions
+        Hành động xử lý
       </h3>
       <div className="grid grid-cols-2 gap-2">
         {BUTTONS.map(b => {
@@ -49,14 +49,14 @@ const TriageControls = ({ anomalyId, assetId, current }: Props) => {
             >
               <Icon size={12} />
               {b.label}
-              {active && <span className="ml-1 text-[10px] uppercase tracking-wider">·current</span>}
+              {active && <span className="ml-1 text-[10px] uppercase tracking-wider">·hiện tại</span>}
             </button>
           );
         })}
       </div>
       {setStatus.error && (
         <p className="mt-1 text-[10px] text-critical">
-          Failed to update: {(setStatus.error as Error).message}
+          Cập nhật thất bại: {(setStatus.error as Error).message}
         </p>
       )}
     </div>

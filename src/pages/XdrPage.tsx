@@ -59,72 +59,72 @@ const XdrPage = () => {
       <header className="flex items-end justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-foreground">
-            XDR Command Centre
+            Trung tâm điều hành XDR
           </h1>
           <p className="text-xs text-muted-foreground">
-            Real-time anomaly &amp; incident view ·
+            Theo dõi bất thường &amp; sự cố theo thời gian thực ·
             <span className="ml-1 inline-flex items-center gap-1">
               <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
-              auto-refresh every {REFRESH_MS / 1000}s
+              tự động làm mới mỗi {REFRESH_MS / 1000} giây
             </span>
           </p>
         </div>
         {anomaliesQ.dataUpdatedAt > 0 && (
           <p className="text-[10px] text-muted-foreground">
-            updated {new Date(anomaliesQ.dataUpdatedAt).toLocaleTimeString()}
+            cập nhật {new Date(anomaliesQ.dataUpdatedAt).toLocaleTimeString('vi-VN')}
           </p>
         )}
       </header>
 
       {apiError && (
         <div className="rounded-md border border-critical/30 bg-critical/10 px-3 py-2 text-xs text-critical">
-          API error: {apiError}.  Check that the backend is running on port 3001.
+          Lỗi API: {apiError}.  Kiểm tra backend đang chạy trên cổng 3001.
         </div>
       )}
 
       {/* KPIs */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-6">
         <StatCard
-          title="Affected Assets"
+          title="Tài sản bị ảnh hưởng"
           value={kpi.uniqueAssets}
           icon={Cpu}
           variant="info"
-          trend="unique IPs in alerts"
+          trend="IP duy nhất trong cảnh báo"
         />
         <StatCard
-          title="Active Connections"
+          title="Kết nối hoạt động"
           value={kpi.totalConn}
           icon={RadioTower}
           variant="default"
-          trend="across current window"
+          trend="trong cửa sổ hiện tại"
         />
         <StatCard
-          title="Active Alerts"
+          title="Cảnh báo đang mở"
           value={kpi.activeAlerts}
           icon={Activity}
           variant={kpi.activeAlerts > 0 ? 'warning' : 'default'}
-          trend={`${kpi.highAlerts} high`}
+          trend={`${kpi.highAlerts} mức cao`}
         />
         <StatCard
-          title="Critical Alerts"
+          title="Cảnh báo nghiêm trọng"
           value={kpi.criticalAlerts}
           icon={AlertTriangle}
           variant={kpi.criticalAlerts > 0 ? 'critical' : 'default'}
-          trend="severity ≥ critical"
+          trend="mức ≥ nghiêm trọng"
         />
         <StatCard
-          title="Incidents"
+          title="Sự cố"
           value={kpi.incidents}
           icon={ShieldAlert}
           variant={kpi.incidents > 0 ? 'critical' : 'default'}
-          trend="≥ 2 types in 5 min"
+          trend="≥ 2 loại trong 5 phút"
         />
         <StatCard
-          title="Rogue Devices"
+          title="Thiết bị lạ"
           value={kpi.rogueDevices}
           icon={ShieldQuestion}
           variant={kpi.rogueDevices > 0 ? 'critical' : 'default'}
-          trend="unknown MAC seen"
+          trend="MAC chưa từng thấy"
         />
       </section>
 
@@ -133,8 +133,8 @@ const XdrPage = () => {
         <div className="rounded-lg border border-border bg-card">
           <EmptyState
             icon={Server}
-            title="System is monitoring network traffic"
-            description="No anomalies detected yet. New events will appear here automatically."
+            title="Hệ thống đang giám sát lưu lượng mạng"
+            description="Chưa phát hiện bất thường nào. Sự kiện mới sẽ hiển thị tại đây tự động."
           />
         </div>
       )}

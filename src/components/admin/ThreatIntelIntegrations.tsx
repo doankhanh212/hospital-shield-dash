@@ -213,10 +213,10 @@ const ThreatIntelIntegrations = () => {
       <div className="flex items-center gap-2">
         <ShieldAlert size={15} className="text-primary" />
         <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">
-          Threat Intelligence
+          Tình báo mối đe dọa
         </h3>
         <span className="text-[11px] text-muted-foreground">
-          Nguồn enrichment cho mọi XDR anomaly
+          Nguồn làm giàu dữ liệu cho mọi bất thường XDR
         </span>
       </div>
 

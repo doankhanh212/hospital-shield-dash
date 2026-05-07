@@ -16,11 +16,11 @@ const ThreatIntelBars = ({ evidence, compact = false }: Props) => {
 
   const tag      = intelTag(evidence);
   const tone     = SEVERITY_TW[tag.tone];
-  const TagIcon  = tag.label === 'malicious'
+  const TagIcon  = tag.label === 'độc hại'
     ? ShieldAlert
-    : tag.label === 'suspicious'
+    : tag.label === 'đáng ngờ'
     ? ShieldAlert
-    : tag.label === 'unknown'
+    : tag.label === 'chưa rõ'
     ? ShieldQuestion
     : ShieldCheck;
 
@@ -46,7 +46,7 @@ const ThreatIntelBars = ({ evidence, compact = false }: Props) => {
 
       <div>
         <div className="mb-1 flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">VirusTotal — malicious / suspicious</span>
+          <span className="text-muted-foreground">VirusTotal — độc hại / đáng ngờ</span>
           <span className="font-mono tabular-nums text-foreground">{vtMal} / {vtSusp}</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -59,7 +59,7 @@ const ThreatIntelBars = ({ evidence, compact = false }: Props) => {
 
       <div>
         <div className="mb-1 flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">AbuseIPDB confidence</span>
+          <span className="text-muted-foreground">AbuseIPDB — điểm tin cậy</span>
           <span className="font-mono tabular-nums text-foreground">{abuse} / 100</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">

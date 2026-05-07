@@ -96,8 +96,8 @@ function fmtUptime(s: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${sec}s`;
+  if (h > 0) return `${h}g ${m}p`;
+  if (m > 0) return `${m}p ${sec}s`;
   return `${sec}s`;
 }
 
@@ -106,23 +106,23 @@ function fmtRel(iso: string | null): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return '—';
   const d = (Date.now() - t) / 1000;
-  if (d < 60)   return `${Math.max(1, Math.round(d))}s ago`;
-  if (d < 3600) return `${Math.round(d / 60)}m ago`;
-  return `${Math.round(d / 3600)}h ago`;
+  if (d < 60)   return `${Math.max(1, Math.round(d))} giây trước`;
+  if (d < 3600) return `${Math.round(d / 60)} phút trước`;
+  return `${Math.round(d / 3600)} giờ trước`;
 }
 
 // ── UI bits ───────────────────────────────────────────────────────────────
 
 function HealthDot({ health, status }: { health: Health; status: SocStatus }) {
-  if (status === 'stopped')  return <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted-foreground" title="STOPPED" />;
-  if (health === 'degraded') return <span className="inline-block h-2.5 w-2.5 rounded-full bg-critical animate-pulse" title="DEGRADED" />;
-  return <span className="inline-block h-2.5 w-2.5 rounded-full bg-success animate-pulse" title="LIVE" />;
+  if (status === 'stopped')  return <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted-foreground" title="ĐÃ DỪNG" />;
+  if (health === 'degraded') return <span className="inline-block h-2.5 w-2.5 rounded-full bg-critical animate-pulse" title="SUY GIẢM" />;
+  return <span className="inline-block h-2.5 w-2.5 rounded-full bg-success animate-pulse" title="TRỰC TUYẾN" />;
 }
 
 function HealthLabel({ health, status }: { health: Health; status: SocStatus }) {
-  if (status === 'stopped')  return <span className="font-semibold text-muted-foreground">STOPPED</span>;
-  if (health === 'degraded') return <span className="font-semibold text-critical">DEGRADED</span>;
-  return <span className="font-semibold text-success">LIVE</span>;
+  if (status === 'stopped')  return <span className="font-semibold text-muted-foreground">ĐÃ DỪNG</span>;
+  if (health === 'degraded') return <span className="font-semibold text-critical">SUY GIẢM</span>;
+  return <span className="font-semibold text-success">TRỰC TUYẾN</span>;
 }
 
 function Metric({ icon: Icon, label, value, sub }: { icon: typeof Cpu; label: string; value: string; sub?: string }) {
@@ -151,18 +151,18 @@ const SocControlPanel = () => {
   const startM = useMutation({
     mutationFn: socApi.start,
     onSuccess:  () => {
-      toast.success('Network monitoring started');
+      toast.success('Đã bắt đầu giám sát mạng');
       qc.invalidateQueries({ queryKey: ['soc'] });
     },
-    onError:    (err) => toast.error(`Start failed: ${(err as Error).message}`),
+    onError:    (err) => toast.error(`Khởi động thất bại: ${(err as Error).message}`),
   });
   const stopM = useMutation({
     mutationFn: socApi.stop,
     onSuccess:  () => {
-      toast.success('Network monitoring stopped');
+      toast.success('Đã dừng giám sát mạng');
       qc.invalidateQueries({ queryKey: ['soc'] });
     },
-    onError:    (err) => toast.error(`Stop failed: ${(err as Error).message}`),
+    onError:    (err) => toast.error(`Dừng thất bại: ${(err as Error).message}`),
   });
 
   const isRunning = status === 'running';
@@ -181,12 +181,12 @@ const SocControlPanel = () => {
           <HealthDot health={health} status={status} />
           <div>
             <p className="text-xs font-semibold text-foreground">
-              Network Monitoring &nbsp;·&nbsp; <HealthLabel health={health} status={status} />
+              Giám sát mạng &nbsp;·&nbsp; <HealthLabel health={health} status={status} />
             </p>
             <p className="text-[11px] text-muted-foreground">
               {isRunning
-                ? <>Sensor <code className="font-mono text-foreground">{m?.interface ?? 'wlp2s0'}</code> · uptime <span className="text-foreground">{fmtUptime(statusQ.data?.uptime ?? 0)}</span></>
-                : 'Idle — click Start to begin processing live traffic'}
+                ? <>Cảm biến <code className="font-mono text-foreground">{m?.interface ?? 'wlp2s0'}</code> · thời gian chạy <span className="text-foreground">{fmtUptime(statusQ.data?.uptime ?? 0)}</span></>
+                : 'Đang chờ — nhấn Bắt đầu để xử lý lưu lượng trực tiếp'}
             </p>
           </div>
         </div>
@@ -198,7 +198,7 @@ const SocControlPanel = () => {
             className="flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-[11px] font-medium text-success transition hover:bg-success/20 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {startM.isPending ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-            Start
+            Bắt đầu
           </button>
           <button
             onClick={() => stopM.mutate()}
@@ -206,7 +206,7 @@ const SocControlPanel = () => {
             className="flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-[11px] font-medium text-rose-400 transition hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {stopM.isPending ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} />}
-            Stop
+            Dừng
           </button>
         </div>
       </div>
@@ -221,7 +221,7 @@ const SocControlPanel = () => {
       {/* Degraded warning */}
       {isRunning && health === 'degraded' && (
         <div className="rounded-md border border-critical/30 bg-critical/10 px-2.5 py-1.5 text-[11px] text-critical">
-          ⚠ No incoming traffic detected — verify the Zeek sensor is capturing on <code className="font-mono">{m?.interface ?? 'wlp2s0'}</code>.
+          ⚠ Không phát hiện lưu lượng đến — kiểm tra cảm biến Zeek đang bắt gói trên <code className="font-mono">{m?.interface ?? 'wlp2s0'}</code>.
         </div>
       )}
 
@@ -234,20 +234,20 @@ const SocControlPanel = () => {
         />
         <Metric
           icon={HardDrive}
-          label="Memory"
+          label="Bộ nhớ"
           value={`${(m?.memory ?? 0).toFixed(1)}%`}
         />
         <Metric
           icon={Activity}
-          label="Events / sec"
+          label="Sự kiện / giây"
           value={eps.toFixed(2)}
-          sub={isRunning ? (eps > 0 ? 'streaming' : 'no events') : 'idle'}
+          sub={isRunning ? (eps > 0 ? 'đang stream' : 'chưa có sự kiện') : 'tạm dừng'}
         />
         <Metric
           icon={Radio}
-          label="Log files"
+          label="Tệp nhật ký"
           value={String(m?.log_files ?? 0)}
-          sub={m?.last_log_time ? `last ${fmtRel(m.last_log_time)}` : '—'}
+          sub={m?.last_log_time ? `mới nhất ${fmtRel(m.last_log_time)}` : '—'}
         />
       </div>
 
@@ -262,7 +262,7 @@ const SocControlPanel = () => {
           ))}
           {m.lag_seconds != null && (
             <span className="ml-auto text-muted-foreground">
-              ingest lag <span className="font-mono tabular-nums text-foreground">{m.lag_seconds.toFixed(1)}s</span>
+              độ trễ thu nhận <span className="font-mono tabular-nums text-foreground">{m.lag_seconds.toFixed(1)}s</span>
             </span>
           )}
         </div>

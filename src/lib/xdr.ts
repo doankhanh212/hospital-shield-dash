@@ -216,8 +216,17 @@ export const SEVERITY_TW: Record<Severity, { bg: string; text: string; border: s
   low:      { bg: 'bg-low/15',      text: 'text-low',      border: 'border-low/30',      ring: 'ring-low/40',      bar: 'bg-low' },
 };
 
+const _TYPE_LABEL_VI: Record<AnomalyType, string> = {
+  port_scan:         'Quét cổng',
+  dns_spike:         'Đột biến DNS',
+  data_exfiltration: 'Rò rỉ dữ liệu',
+  rare_ja3:          'JA3 hiếm',
+  rare_domain:       'Tên miền hiếm',
+  rogue_device:      'Thiết bị lạ',
+};
+
 export function fmtType(t: AnomalyType): string {
-  return t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return _TYPE_LABEL_VI[t] ?? t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 export function fmtBytes(n: number | undefined): string {
@@ -233,29 +242,30 @@ export function fmtRelativeTime(iso: string | null | undefined): string {
   const ts = new Date(iso).getTime();
   if (Number.isNaN(ts)) return '—';
   const diff = (Date.now() - ts) / 1000;
-  if (diff < 60)    return `${Math.max(1, Math.round(diff))}s ago`;
-  if (diff < 3600)  return `${Math.round(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.round(diff / 3600)}h ago`;
-  return `${Math.round(diff / 86400)}d ago`;
+  if (diff < 60)    return `${Math.max(1, Math.round(diff))} giây trước`;
+  if (diff < 3600)  return `${Math.round(diff / 60)} phút trước`;
+  if (diff < 86400) return `${Math.round(diff / 3600)} giờ trước`;
+  return `${Math.round(diff / 86400)} ngày trước`;
 }
 
 export const STATUS_TONE: Record<TriageStatus, { label: string; cls: string }> = {
-  new:            { label: 'New',          cls: 'bg-low/15 text-low border-low/30' },
-  investigating:  { label: 'Investigating',cls: 'bg-medium/15 text-medium border-medium/30' },
-  escalated:      { label: 'Escalated',    cls: 'bg-high/15 text-high border-high/30' },
-  resolved:       { label: 'Resolved',     cls: 'bg-success/15 text-success border-success/30' },
-  false_positive: { label: 'False positive',cls: 'bg-muted text-muted-foreground border-border' },
+  new:            { label: 'Mới',           cls: 'bg-low/15 text-low border-low/30' },
+  investigating:  { label: 'Đang điều tra', cls: 'bg-medium/15 text-medium border-medium/30' },
+  escalated:      { label: 'Leo thang',     cls: 'bg-high/15 text-high border-high/30' },
+  resolved:       { label: 'Đã xử lý',      cls: 'bg-success/15 text-success border-success/30' },
+  false_positive: { label: 'Báo nhầm',      cls: 'bg-muted text-muted-foreground border-border' },
 };
 
-export function intelTag(ev: AnomalyEvidence): { label: 'malicious' | 'suspicious' | 'clean' | 'unknown'; tone: Severity } {
+export type IntelLabel = 'độc hại' | 'đáng ngờ' | 'sạch' | 'chưa rõ';
+
+export function intelTag(ev: AnomalyEvidence): { label: IntelLabel; tone: Severity } {
   const vtMal  = ev.vt_malicious  ?? 0;
   const vtSusp = ev.vt_suspicious ?? 0;
   const abuse  = ev.abuse_score   ?? 0;
-  if (vtMal >= 5 || abuse >= 75)            return { label: 'malicious',  tone: 'critical' };
-  if (vtMal >= 1 || vtSusp >= 3 || abuse >= 25) return { label: 'suspicious', tone: 'high' };
+  if (vtMal >= 5 || abuse >= 75)                return { label: 'độc hại',  tone: 'critical' };
+  if (vtMal >= 1 || vtSusp >= 3 || abuse >= 25) return { label: 'đáng ngờ', tone: 'high' };
   if (vtMal === 0 && vtSusp === 0 && abuse === 0) {
-    // No signal — could be unenriched (no key) or genuinely clean.
-    return { label: 'unknown', tone: 'low' };
+    return { label: 'chưa rõ', tone: 'low' };
   }
-  return { label: 'clean', tone: 'low' };
+  return { label: 'sạch', tone: 'low' };
 }

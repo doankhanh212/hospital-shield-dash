@@ -92,7 +92,7 @@ const AnomalyDetailDrawer = ({ anomaly, related, onClose }: Props) => {
           {/* Score */}
           <section>
             <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Confidence Score
+              Điểm tin cậy
             </h3>
             <ScoreBar score={anomaly.score} severity={anomaly.severity} />
           </section>
@@ -132,18 +132,18 @@ const AnomalyDetailDrawer = ({ anomaly, related, onClose }: Props) => {
           {/* Asset */}
           <section>
             <h3 className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <Cpu size={11} /> Asset
+              <Cpu size={11} /> Tài sản
             </h3>
             <div className="rounded-md border border-border bg-background/40 px-3 py-2">
-              <Row label="IP"          value={anomaly.asset_id}                    mono />
-              <Row label="MAC"         value={asset?.mac      ?? 'unknown'}        mono />
-              <Row label="Vendor"      value={asset?.vendor   ?? 'unknown'} />
-              <Row label="Device Type" value={asset?.device_type ?? 'unclassified'} />
-              <Row label="Confidence"  value={asset?.confidence != null ? `${asset.confidence.toFixed(0)}%` : '—'} mono />
+              <Row label="IP"             value={anomaly.asset_id}                          mono />
+              <Row label="MAC"            value={asset?.mac      ?? 'không rõ'}             mono />
+              <Row label="Nhà sản xuất"   value={asset?.vendor   ?? 'không rõ'} />
+              <Row label="Loại thiết bị"  value={asset?.device_type ?? 'chưa phân loại'} />
+              <Row label="Độ tin cậy"     value={asset?.confidence != null ? `${asset.confidence.toFixed(0)}%` : '—'} mono />
             </div>
             {!asset && (
               <p className="mt-1 text-[11px] italic text-muted-foreground">
-                IP not yet linked to a known asset (external or pre-classification).
+                IP chưa được liên kết với tài sản đã biết (bên ngoài hoặc chưa phân loại).
               </p>
             )}
           </section>
@@ -151,25 +151,25 @@ const AnomalyDetailDrawer = ({ anomaly, related, onClose }: Props) => {
           {/* Behavior */}
           <section>
             <h3 className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <Activity size={11} /> Behavior Summary
+              <Activity size={11} /> Tóm tắt hành vi
             </h3>
             <div className="grid grid-cols-3 gap-2">
-              <MetricTile icon={<Network  size={12} />} label="Ports"   value={ports != null ? String(ports) : '—'} />
-              <MetricTile icon={<Globe    size={12} />} label="Domains" value={dom   != null ? String(dom)   : '—'} />
-              <MetricTile icon={<ServerCog size={12} />} label="Out"   value={bytes != null ? fmtBytes(bytes) : '—'} />
+              <MetricTile icon={<Network  size={12} />} label="Cổng"     value={ports != null ? String(ports) : '—'} />
+              <MetricTile icon={<Globe    size={12} />} label="Tên miền" value={dom   != null ? String(dom)   : '—'} />
+              <MetricTile icon={<ServerCog size={12} />} label="Gửi đi"  value={bytes != null ? fmtBytes(bytes) : '—'} />
             </div>
             {ev.deviation && (
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Deviation from baseline: <span className="font-mono text-foreground">{ev.deviation.toFixed(2)}×</span>
+                Sai lệch khỏi ngưỡng: <span className="font-mono text-foreground">{ev.deviation.toFixed(2)}×</span>
                 {ev.baseline_warm === false && (
-                  <span className="ml-1 text-warning">(cold baseline — fewer than 5 samples)</span>
+                  <span className="ml-1 text-warning">(ngưỡng đang khởi động — dưới 5 mẫu)</span>
                 )}
               </p>
             )}
             {ja3s && ja3s.length > 0 && (
               <div className="mt-3">
                 <h4 className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Fingerprint size={11} /> Rare JA3 fingerprints
+                  <Fingerprint size={11} /> JA3 hiếm
                 </h4>
                 <div className="space-y-1">
                   {ja3s.slice(0, 5).map(j => (
@@ -181,7 +181,7 @@ const AnomalyDetailDrawer = ({ anomaly, related, onClose }: Props) => {
             {rare_dom && rare_dom.length > 0 && (
               <div className="mt-3">
                 <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Rare domains
+                  Tên miền hiếm
                 </h4>
                 <div className="flex flex-wrap gap-1">
                   {rare_dom.slice(0, 8).map(d => (
@@ -195,7 +195,7 @@ const AnomalyDetailDrawer = ({ anomaly, related, onClose }: Props) => {
           {/* Threat intel */}
           <section>
             <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Threat Intelligence
+              Tình báo mối đe dọa
             </h3>
             <ThreatIntelBars evidence={ev} />
           </section>
@@ -204,7 +204,7 @@ const AnomalyDetailDrawer = ({ anomaly, related, onClose }: Props) => {
           {related.length > 1 && (
             <section>
               <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Recent Anomalies for This Asset
+                Bất thường gần đây của tài sản này
               </h3>
               <div className="space-y-1">
                 {related.filter(r => r.id !== anomaly.id).slice(0, 5).map(r => (
@@ -223,7 +223,7 @@ const AnomalyDetailDrawer = ({ anomaly, related, onClose }: Props) => {
           {/* Raw evidence */}
           <section>
             <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Raw Evidence
+              Bằng chứng thô
             </h3>
             <pre className="max-h-40 overflow-auto rounded-md border border-border bg-background/60 p-2 text-[10px] font-mono text-foreground">
               {JSON.stringify(ev, null, 2)}

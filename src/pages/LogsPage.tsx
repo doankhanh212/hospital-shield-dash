@@ -91,7 +91,7 @@ const LogsPage = () => {
       <PageHeader
         title="Nhật ký hệ thống"
         description={tab === 'network'
-          ? `${logs.length} sự kiện từ Zeek logs`
+          ? `${logs.length} sự kiện từ nhật ký Zeek`
           : 'Cảnh báo bảo mật theo thời gian thực (XDR)'}
         actions={
           <button onClick={refetchAll} className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
@@ -110,7 +110,7 @@ const LogsPage = () => {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <NetIcon size={14} /> Network Logs
+          <NetIcon size={14} /> Nhật ký mạng
         </button>
         <button
           onClick={() => setTab('alerts')}
@@ -120,7 +120,7 @@ const LogsPage = () => {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <ShieldAlert size={14} /> Security Alerts
+          <ShieldAlert size={14} /> Cảnh báo bảo mật
         </button>
       </div>
 

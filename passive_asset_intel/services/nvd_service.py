@@ -516,6 +516,33 @@ def _build_date_windows(
     return windows
 
 
+def _cpe_to_keyword(cpe_str: str) -> str:
+    """Extract a NVD-friendly keyword from a CPE 2.3 URI.
+
+    NVD's ``virtualMatchString`` started returning 404 for prefix queries in
+    mid-2025 (works only for fully-specified CPEs).  ``keywordSearch`` is the
+    documented fallback that still works for vendor-only / version-wildcard
+    CPEs and produces the same set of relevant CVEs (NVD does the matching
+    server-side against CVE descriptions and configurations).
+
+    Examples:
+        cpe:2.3:o:microsoft:windows:*  → "microsoft windows"
+        cpe:2.3:h:dahua:*              → "dahua"
+        cpe:2.3:o:linux:linux_kernel:* → "linux linux_kernel"
+    """
+    parts = cpe_str.split(":")
+    # parts: [cpe, 2.3, part, vendor, product, version, ...]
+    vendor  = parts[3] if len(parts) > 3 and parts[3] not in ("", "*") else ""
+    product = parts[4] if len(parts) > 4 and parts[4] not in ("", "*") else ""
+    if vendor and product:
+        return f"{vendor} {product}".replace("_", " ")
+    if vendor:
+        return vendor.replace("_", " ")
+    if product:
+        return product.replace("_", " ")
+    return ""
+
+
 async def _fetch_single_window(
     client: httpx.AsyncClient,
     cpe_str: str,
@@ -525,10 +552,14 @@ async def _fetch_single_window(
     results_per_page: int = 2000,
 ) -> list[dict[str, Any]]:
     """Fetch CVEs for one (CPE, 120-day window) pair with retry."""
+    keyword = _cpe_to_keyword(cpe_str)
+    if not keyword:
+        return []
     params = {
-        "virtualMatchString": normalized,
-        "pubStartDate": _nvd_date(window_start),
-        "pubEndDate": _nvd_date(window_end),
+        # keywordSearch instead of virtualMatchString — see _cpe_to_keyword docstring.
+        "keywordSearch": keyword,
+        "pubStartDate":  _nvd_date(window_start),
+        "pubEndDate":    _nvd_date(window_end),
         "resultsPerPage": results_per_page,
     }
 

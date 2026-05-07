@@ -33,13 +33,13 @@ const TimelinePanel = ({ assetId }: Props) => {
   return (
     <div>
       <h3 className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        <Clock size={11} /> Asset Timeline
+        <Clock size={11} /> Dòng thời gian tài sản
       </h3>
 
       {q.isLoading && events.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Loading timeline…</p>
+        <p className="text-xs text-muted-foreground">Đang tải dòng thời gian…</p>
       ) : events.length === 0 ? (
-        <p className="text-xs italic text-muted-foreground">No events yet for this asset.</p>
+        <p className="text-xs italic text-muted-foreground">Chưa có sự kiện nào cho tài sản này.</p>
       ) : (
         <ol className="relative space-y-2 border-l border-border pl-4">
           {events.map((e, i) => {

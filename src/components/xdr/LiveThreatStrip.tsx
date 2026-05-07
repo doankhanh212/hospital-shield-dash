@@ -39,7 +39,7 @@ const LiveThreatStrip = () => {
         <div className="flex items-center gap-2">
           <Activity size={14} className="text-primary" />
           <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-            Live Threat Activity
+            Hoạt động đe dọa trực tiếp
           </h2>
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
         </div>
@@ -47,7 +47,7 @@ const LiveThreatStrip = () => {
           onClick={() => nav('/xdr')}
           className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/30 transition"
         >
-          XDR Command <ChevronRight size={11} />
+          Trung tâm XDR <ChevronRight size={11} />
         </button>
       </div>
 
@@ -67,12 +67,12 @@ const LiveThreatStrip = () => {
       <div>
         {isLoading && recent.length === 0 ? (
           <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-            Loading…
+            Đang tải…
           </div>
         ) : recent.length === 0 ? (
           <div className="px-4 py-6 text-center text-xs text-muted-foreground">
             <Radar size={18} className="mx-auto mb-1 text-muted-foreground/60" />
-            System is monitoring traffic — no threats detected.
+            Hệ thống đang giám sát — chưa phát hiện đe dọa.
           </div>
         ) : (
           <ul className="divide-y divide-border/60">

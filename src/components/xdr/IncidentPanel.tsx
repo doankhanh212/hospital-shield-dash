@@ -23,19 +23,19 @@ const IncidentPanel = ({ incidents, loading = false, onSelectAsset }: Props) => 
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <Flame size={14} className="text-critical" />
         <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-          Active Incidents
+          Sự cố đang hoạt động
         </h2>
         <span className="ml-auto text-xs text-muted-foreground">{incidents.length}</span>
       </div>
 
       <div className="max-h-[420px] overflow-y-auto">
         {loading && incidents.length === 0 ? (
-          <div className="px-4 py-6 text-center text-xs text-muted-foreground">Loading incidents…</div>
+          <div className="px-4 py-6 text-center text-xs text-muted-foreground">Đang tải sự cố…</div>
         ) : incidents.length === 0 ? (
           <div className="px-2">
             <EmptyState
-              title="No active incidents"
-              description="Incidents form when an asset triggers ≥ 2 distinct anomaly types within 5 minutes."
+              title="Không có sự cố hoạt động"
+              description="Sự cố hình thành khi một tài sản phát ≥ 2 loại bất thường khác nhau trong 5 phút."
             />
           </div>
         ) : (
@@ -73,9 +73,9 @@ const IncidentPanel = ({ incidents, loading = false, onSelectAsset }: Props) => 
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
-                    <span>opened <span className="text-foreground">{opened}</span></span>
+                    <span>mở lúc <span className="text-foreground">{opened}</span></span>
                     <span className="opacity-30">·</span>
-                    <span>last seen <span className="text-foreground">{last}</span></span>
+                    <span>mới nhất <span className="text-foreground">{last}</span></span>
                   </div>
                 </li>
               );

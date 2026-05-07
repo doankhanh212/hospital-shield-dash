@@ -28,20 +28,20 @@ const AssetAnomalyPanel = ({ ip }: Props) => {
       <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <Radar size={14} className="text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">Threat Activity (XDR)</h2>
+          <h2 className="text-sm font-semibold text-foreground">Hoạt động đe dọa (XDR)</h2>
         </div>
-        <span className="text-[10px] text-muted-foreground">{items.length} anomalies · live</span>
+        <span className="text-[10px] text-muted-foreground">{items.length} bất thường · trực tiếp</span>
       </div>
 
       {!ip ? (
         <p className="px-4 py-6 text-center text-xs italic text-muted-foreground">
-          Asset has no IP — XDR cannot correlate.
+          Tài sản chưa có IP — XDR không thể đối chiếu.
         </p>
       ) : isLoading && items.length === 0 ? (
-        <p className="px-4 py-6 text-center text-xs text-muted-foreground">Loading…</p>
+        <p className="px-4 py-6 text-center text-xs text-muted-foreground">Đang tải…</p>
       ) : items.length === 0 ? (
         <p className="px-4 py-6 text-center text-xs italic text-muted-foreground">
-          No anomalies detected for this asset. Behaviour is within baseline.
+          Không phát hiện bất thường nào cho tài sản này. Hành vi trong ngưỡng bình thường.
         </p>
       ) : (
         <ul className="divide-y divide-border/60">

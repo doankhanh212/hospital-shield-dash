@@ -25,7 +25,7 @@ const AssignmentSelect = ({ anomalyId, assetId, current }: Props) => {
   return (
     <div>
       <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Assignment
+        Phân công
       </h3>
       <div className="flex items-center gap-2">
         <UserCircle2 size={14} className="text-muted-foreground" />
@@ -38,9 +38,9 @@ const AssignmentSelect = ({ anomalyId, assetId, current }: Props) => {
           }}
           className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="">— unassigned —</option>
+          <option value="">— chưa phân công —</option>
           {roster.map(u => (
-            <option key={u} value={u}>{u}{u === me ? ' (me)' : ''}</option>
+            <option key={u} value={u}>{u}{u === me ? ' (tôi)' : ''}</option>
           ))}
         </select>
         {me && current !== me && (
@@ -49,13 +49,13 @@ const AssignmentSelect = ({ anomalyId, assetId, current }: Props) => {
             onClick={() => assign.mutate(me)}
             className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 transition disabled:opacity-50"
           >
-            Take
+            Nhận xử lý
           </button>
         )}
       </div>
       {assign.error && (
         <p className="mt-1 text-[10px] text-critical">
-          Failed: {(assign.error as Error).message}
+          Lỗi: {(assign.error as Error).message}
         </p>
       )}
     </div>

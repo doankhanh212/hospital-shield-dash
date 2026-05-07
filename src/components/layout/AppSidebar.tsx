@@ -16,7 +16,7 @@ const monitoringMenu = [
 
 // PHÂN TÍCH — investigation surface
 const analysisMenu = [
-  { path: '/xdr',       icon: Radar,      label: 'XDR Command' },
+  { path: '/xdr',       icon: Radar,      label: 'Trung tâm XDR' },
   { path: '/alerts',    icon: Bell,       label: 'Cảnh báo' },
   { path: '/logs',      icon: ScrollText, label: 'Nhật ký' },
 ];
