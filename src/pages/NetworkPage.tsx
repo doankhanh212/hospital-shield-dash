@@ -28,6 +28,26 @@ import { format } from 'date-fns';
 
 const HOVER_DELAY_MS = 100;
 
+/**
+ * Compact IP label that fits the 56-px grid cell:
+ *   IPv4 → ".<last octet>" (e.g. 192.168.100.184 → ".184")
+ *   IPv6 → "…<last 4 hex>"
+ *   anything else (hostname, missing) → first 8 chars
+ * Full address is still surfaced via the AssetTooltip.
+ */
+const shortLabel = (ip: string | null | undefined): string => {
+  if (!ip) return '—';
+  if (/^\d+\.\d+\.\d+\.\d+/.test(ip)) {
+    const parts = ip.split('.');
+    return '.' + parts[parts.length - 1];
+  }
+  if (ip.includes(':')) {
+    const tail = ip.split(':').filter(Boolean).pop() ?? '';
+    return '…' + tail.slice(-4);
+  }
+  return ip.slice(0, 8);
+};
+
 const fmtBytes = (b: number | null) => {
   if (!b) return '—';
   if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB';
@@ -718,9 +738,9 @@ const TopologyView = ({ data }: TopologyViewProps) => {
                         y={r + 12}
                         textAnchor="middle"
                         className="fill-foreground"
-                        style={{ fontSize: 8, fontFamily: 'monospace' }}
+                        style={{ fontSize: 9, fontFamily: 'monospace' }}
                       >
-                        {n.ip?.replace(/^103\.98\.152\./, '.') ?? ''}
+                        {shortLabel(n.ip)}
                       </text>
                     )}
                   </g>

@@ -1,8 +1,31 @@
 # HQG Security Platform — Tài liệu Kỹ thuật
 
-> **Hospital Shield Dash — Passive Asset Intelligence Platform**
-> Cập nhật: 2026-04-21
-> Mục đích: Giám sát thụ động (passive) toàn bộ tài sản mạng bệnh viện, phân loại thiết bị (IoMT/IoT/Workstation/Server/Network/Printer/IP Camera) và phát hiện rủi ro mà **không** gửi gói tin chủ động.
+> **Hospital Shield Dash — Passive Asset Intelligence + XDR Platform**
+> Cập nhật: 2026-05-07 (v3.0 — XDR + SOC + Triage)
+> Mục đích: Giám sát thụ động (passive) toàn bộ tài sản mạng bệnh viện, phân loại thiết bị (IoMT/IoT/Workstation/Server/Network/Printer/IP Camera), phát hiện anomaly + rogue device, enrich threat intel, và quản lý vòng đời triage — **không** gửi gói tin chủ động.
+
+---
+
+## 🚀 v3.0 changelog (May 2026)
+
+Bản cập nhật lớn biến nền tảng từ "passive asset intel only" thành **full XDR + SOC platform**:
+
+| Khu vực | Thêm mới |
+|---|---|
+| **Detection** | 6 anomaly types: port_scan · dns_spike · data_exfiltration · rare_ja3 · rare_domain · **rogue_device** |
+| **Scoring** | Composite 0-1 score (rule weight + baseline deviation + VT + AbuseIPDB) → severity bands |
+| **Threat intel** | VirusTotal + AbuseIPDB async integration (httpx, 2s timeout, 1h cache) |
+| **Triage workflow** | Status (new/investigating/escalated/resolved/false_positive), assign analyst, notes, audit log |
+| **Asset enrichment** | Passive MAC capture (Zeek mac-logging) + offline OUI lookup (`manuf` lib) → real vendors |
+| **Asset fingerprint** | Device-type heuristic (vendor + JA3 + ports + DNS + UA + hostname) |
+| **Rogue detection** | Unknown MAC alerting w/ severity scaling by vendor knowability |
+| **Passive NAC** | Recommends `monitor / restrict / isolate` (never enforces) |
+| **SOC operations** | Live ingestion control, EPS metrics, CPU/mem, log breakdown |
+| **Data management** | Manual purge controls (multicast/external/all) w/ dry-run preview |
+| **Frontend** | XDR Command Centre · SOC panel · Threat Intel viz · Timeline · Triage drawer |
+| **Operations** | `run.py` single-command launcher (backend + pipeline + frontend) |
+
+Toàn bộ thay đổi **additive** — không rewrite schema, không sửa inference engine.
 
 ---
 
@@ -26,6 +49,9 @@
 16. [Vận hành & kiểm chứng](#16-vận-hành--kiểm-chứng)
 17. [Các hạn chế đã biết](#17-các-hạn-chế-đã-biết)
 18. [Xu hướng phát triển: XDR và NAC](#18-xu-hướng-phát-triển-xdr-và-nac)
+19. [**XDR Subsystem (v3)**](#19-xdr-subsystem-v3) — anomaly detection, scoring, threat intel, triage
+20. [**SOC Operations (v3)**](#20-soc-operations-v3) — ingestion control, metrics, data management
+21. [**Launcher (v3)**](#21-launcher-v3) — `run.py` single-command bootstrap
 
 ---
 
@@ -1429,3 +1455,315 @@ Kết luận kỹ thuật: repo hiện tại đã là một nền tốt để đ
 - Frontend: [src/](src/)
 - Schema: [passive_asset_intel/schema.sql](passive_asset_intel/schema.sql)
 - Rules: [passive_asset_intel/inference/rules.py](passive_asset_intel/inference/rules.py)
+
+---
+
+## 19. XDR Subsystem (v3)
+
+### 19.1 Tổng quan
+
+Thay vì chỉ "phát hiện và phân loại tài sản" như v2, hệ thống v3 thêm một lớp **eXtended Detection & Response** chạy song song với pipeline ingest legacy:
+
+```
+Zeek logs ──► Legacy parser ──► assets / connections / dns_queries (giữ nguyên)
+            │
+            └► XDR pipeline ──► xdr_anomalies, xdr_incidents, xdr_audit_log,
+                                 xdr_asset_profiles, xdr_settings (mới)
+```
+
+XDR pipeline (`passive_asset_intel/services/zeek_pipeline.py`) đọc cùng `conn.log / dns.log / ssl.log`, aggregate theo cửa sổ 30/60s/IP, chạy detection rules + threat intel enrichment, ghi anomaly và incident.
+
+### 19.2 Database tables (additive)
+
+| Table | Vai trò |
+|---|---|
+| `xdr_anomalies` | Một row = một (asset_id, type) — count tăng mỗi lần re-detect |
+| `xdr_incidents` | Tự gom khi 1 asset có ≥ 2 anomaly types trong 5 phút |
+| `xdr_asset_profiles` | EWMA baseline + frequency maps (ports/domains/ja3) per IP |
+| `xdr_audit_log` | Mọi triage action (assign / status_change / note) |
+| `xdr_settings` | KV store cho VT_API_KEY, ABUSEIPDB_API_KEY |
+| `xdr_assets` | XDR-namespaced asset registry (IP-keyed, không xung đột với `assets` MAC-keyed) |
+
+`xdr_anomalies.asset_uuid` là **soft FK** tới `assets(id)` (NULL được phép cho external IP), resolve qua `asset_ips` để ghép tài sản v2 ↔ anomaly v3.
+
+### 19.3 Anomaly types
+
+| Type | Trigger | Cold start | Warm baseline (≥ 5 samples) |
+|---|---|---|---|
+| `port_scan` | `unique_ports > max(20, baseline×3)` | static floor 20 | hybrid |
+| `dns_spike` | `unique_domains > max(30, baseline×3)` | static floor 30 | hybrid |
+| `data_exfiltration` | `bytes_out > max(5MB, baseline×4)` | static floor 5 MB | hybrid |
+| `rare_ja3` | JA3 không có trong common_ja3 | **disabled** | active |
+| `rare_domain` | ≥ 5 domains không có trong common_domains | **disabled** | active |
+| `rogue_device` | MAC chưa từng thấy ≥ 30 ngày | active | active |
+
+Cold-start gating + warm-up suppression giảm false-positive đáng kể.
+
+### 19.4 Scoring
+
+```
+score = base_weight[type]                       (0.20 – 0.55)
+      + min(0.30, (deviation - 1) × 0.05)       baseline contribution
+      + min(0.40, vt_signal / 90 × 0.40)        VirusTotal contribution
+      + (abuse_score / 100) × 0.30              AbuseIPDB contribution
+severity = ≥0.9 critical · ≥0.7 high · ≥0.4 medium · else low
+```
+
+Implementation: [`xdr/scoring.py`](passive_asset_intel/xdr/scoring.py).
+
+### 19.5 Threat Intelligence
+
+Module: [`xdr/threat_intel.py`](passive_asset_intel/xdr/threat_intel.py).
+
+- **VirusTotal v3**: `GET /api/v3/ip_addresses/{ip}` → `last_analysis_stats.malicious / suspicious`
+- **AbuseIPDB v2**: `GET /api/v2/check?ipAddress={ip}` → `data.abuseConfidenceScore`
+- **Timeout**: 2s · **Cache**: 1h TTL · **Negative cache**: 5 min
+- **IP filter**: skip private / loopback / link-local / multicast / reserved (chỉ public IPv4/IPv6 được lookup)
+- **API keys**: lưu trong `xdr_settings`, đọc on-demand qua `get_setting()` (60s in-memory cache)
+
+Frontend cấu hình tại `/admin/integrations` — 2 cards (VT + AbuseIPDB) gọi `POST /api/xdr/settings`. Values trả về masked (`***xxxx`).
+
+### 19.6 Asset Fingerprint Engine
+
+Module: [`xdr/fingerprint.py`](passive_asset_intel/xdr/fingerprint.py).
+
+Đầu vào (read-only on legacy data):
+- vendor (từ MAC OUI lookup, qua `manuf` package)
+- ports được mở
+- DNS volume + JA3 count
+- HTTP user-agent
+- hostname (từ DHCP)
+
+Đầu ra: `device_type` (Workstation / Mobile / IoT / IP Camera / Printer / Network / Server / IoMT / Unknown) + confidence 0–1 + reasoning bullet list.
+
+Heuristic ưu tiên: **vendor → MAC type → port profile → JA3/DNS chattiness → user-agent → hostname**. Đa tín hiệu trùng → bonus +5% per agreement.
+
+### 19.7 Rogue Device Detector
+
+Module: [`xdr/rogue.py`](passive_asset_intel/xdr/rogue.py).
+
+```
+MAC chưa từng thấy ≥ SEEN_WINDOW_DAYS (30) → fire `rogue_device` anomaly
+  - vendor unknown / locally-administered → severity high
+  - vendor known                          → severity medium
+```
+
+Idempotent: dedup qua unique key `(asset_id, type)` của `xdr_anomalies`, lần fire lại chỉ tăng `count`.
+
+### 19.8 Passive NAC Engine
+
+Module: [`xdr/nac.py`](passive_asset_intel/xdr/nac.py).
+
+Decision matrix:
+
+| Điều kiện | Action | Severity |
+|---|---|---|
+| `rogue_device` | isolate | critical |
+| score ≥ 0.9 | isolate | critical |
+| score ≥ 0.7 | restrict | high |
+| device_type ∈ {IoT, IP Camera, IoMT, Printer} & opens ports {22, 23, 3389, 445, 3306, …} | restrict | high |
+| score ≥ 0.4 | monitor | medium |
+| else | monitor | low |
+
+NAC chỉ **gợi ý** — không thực thi. Kết quả ride trong `evidence.nac` của anomaly.
+
+### 19.9 Triage Workflow
+
+Mỗi anomaly có:
+- `status` ∈ {new, investigating, escalated, resolved, false_positive}
+- `assigned_to` (text)
+- `note` (text, last write)
+- `updated_at`
+
+Mọi action sinh row trong `xdr_audit_log` (`actor`, `action`, `old_value`, `new_value`).
+
+API:
+- `PATCH /api/xdr/anomalies/{id}/status`
+- `POST  /api/xdr/anomalies/{id}/assign`
+- `POST  /api/xdr/anomalies/{id}/note`
+- `GET   /api/xdr/audit?asset_id=...`
+- `GET   /api/xdr/assets/{ip}/timeline` — merged anomaly + action stream
+
+Frontend: triage drawer trong `/xdr` (status buttons, analyst dropdown, notes panel, vertical timeline). Tất cả mutation invalidate TanStack Query keys → live refresh.
+
+### 19.10 Frontend modules
+
+```
+src/lib/xdr.ts                              types + API client
+src/hooks/useXdr.ts                         polling + mutations
+src/hooks/useUnifiedAssets.ts               legacy → XDR fallback
+src/pages/XdrPage.tsx                       Command Centre (KPI + table + map + drawer)
+src/components/xdr/
+  AnomalyTable.tsx                          sortable / filterable / status+assigned cols
+  AnomalyDetailDrawer.tsx                   slide-in: triage + assignment + notes + timeline
+  IncidentPanel.tsx                         grouped by asset
+  NetworkMiniMap.tsx                        SVG radial, color = highest severity
+  TriageControls.tsx                        4 buttons (Investigating / Escalate / Resolve / FP)
+  AssignmentSelect.tsx                      analyst dropdown + "Take" button
+  NotesPanel.tsx                            current note + textarea
+  TimelinePanel.tsx                         merged anomaly + action events
+  ScoreBar.tsx · SeverityChip.tsx · StatusBadge.tsx · ThreatIntelBars.tsx
+  LiveThreatStrip.tsx                       embedded on Dashboard + Network pages
+  AssetAnomalyPanel.tsx                     embedded on legacy Asset Detail
+  XdrAlertsTab.tsx                          Logs page security tab
+src/components/admin/ThreatIntelIntegrations.tsx   VT + AbuseIPDB card pair
+```
+
+---
+
+## 20. SOC Operations (v3)
+
+### 20.1 SOC Control Panel
+
+Component: [`src/components/soc/SocControlPanel.tsx`](src/components/soc/SocControlPanel.tsx). Mounted at top of Dashboard, replaces the legacy "Quét mạng" stub.
+
+Real-time (polling 3s):
+- 🟢 LIVE / ⚪ STOPPED / 🔴 DEGRADED status dot
+- CPU% (`/proc/loadavg ÷ cpu_count`)
+- Memory% (`/proc/self/status` VmRSS ÷ MemTotal)
+- Events / sec (delta of conn+dns+ssl line counts between calls)
+- Log file count + last-modified relative time
+- Per-log breakdown chips (conn / dns / ssl)
+- Ingest lag in seconds
+- Sensor interface name
+- Start / Stop buttons w/ spinner + toast feedback
+
+Backend: [`api/routes/soc.py`](passive_asset_intel/api/routes/soc.py).
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/soc/status` | GET | running / stopped, pid, uptime |
+| `/api/soc/start` | POST | Wraps existing `ScanService.start(mode='live')` |
+| `/api/soc/stop` | POST | Graceful stop |
+| `/api/soc/metrics` | GET | Full metrics block |
+
+Health logic: `running + EPS=0` ⇒ degraded (warning banner), `running + EPS>0` ⇒ healthy.
+
+### 20.2 Data Management
+
+Backend: [`api/routes/data.py`](passive_asset_intel/api/routes/data.py).
+
+| Endpoint | Method | Action |
+|---|---|---|
+| `/api/data/stats` | GET | Counts per category (internal/external/multicast/link_local/IPv6/anomalies/audit) |
+| `/api/data/retention` | GET / PUT | Auto-purge config (`LOG_RETENTION_DAYS` in `.env`; 0 = disabled) |
+| `/api/data/purge` | POST | Filtered purge w/ `dry_run` preview |
+| `/api/data/asset/{ip}` | DELETE | Cascade-delete one asset |
+
+Filter flags trên `/purge`: `older_than_days`, `only_external`, `only_multicast`, `only_ipv6_link_local`, `only_ipv6`, `subnet`, `delete_all` + `dry_run`.
+
+Cascade strategy: drop telemetry rows owned by target asset_id, **detach** XDR linkage (`asset_uuid = NULL`) để giữ audit history. Mỗi DELETE chạy trong savepoint riêng để optional table không poison transaction.
+
+Frontend: [`src/pages/admin/AdminDataPage.tsx`](src/pages/admin/AdminDataPage.tsx) — stats grid + retention slider + 4 quick-clean cards w/ dry-run preview modal + type-to-confirm cho destructive action.
+
+### 20.3 Auto-purge default
+
+Trên `.env`:
+```
+LOG_RETENTION_DAYS=0    # 0 = giữ tất cả (default v3)
+```
+
+`DiskManager` (`services/disk_manager.py`) skip cleanup khi giá trị ≤ 0. User chủ động xoá qua `/admin/data` UI khi cần.
+
+### 20.4 Passive MAC + Vendor pipeline
+
+| Bước | Thay đổi |
+|---|---|
+| Zeek config | Thêm `@load policy/protocols/conn/mac-logging` → `conn.log` có `orig_l2_addr` / `resp_l2_addr` |
+| | Thêm `@load base/protocols/dhcp` → `dhcp.log` cho hostname mapping |
+| Conn parser | Đọc `orig_l2_addr` / `resp_l2_addr`, filter broadcast/multicast/STP, pass MAC vào `resolve_asset()` |
+| Base parser | Auto-detect TSV vs JSON theo first byte; cùng pipeline xử lý cả 2 format |
+| MAC vendor | Module `inference/mac_vendor.py` thêm offline lookup chain: `manuf` (IEEE OUI bundled, sub-ms) → cache → HTTP API fallback |
+
+Yêu cầu: `pip install manuf` (đã có trong venv).
+
+### 20.5 Zeek modules đã enable (v3)
+
+```
+core:        conn · dns · http · ssl · dhcp
+L2:          mac-logging
+TLS depth:   ssl-log-ext · JA3
+HTTP depth:  detect-webapps
+Enterprise:  krb · smb · ntlm · rdp · community-id-logging · ftp/detect-bruteforcing
+Asset:       known-hosts · known-services · known-certs
+Software:    vulnerable + version-changes
+Threat:      detect-sqli · detect-bruteforcing
+File:        hash-all-files
+Tuning:      capture-loss · stats · tuning/defaults
+Custom:      site/ja3 (offline JA3/JA3S computation)
+```
+
+JSON logging luôn bật: `redef LogAscii::use_json = T;`.
+
+### 20.6 Network Map UX fix (v3.0.1)
+
+`NetworkPage.tsx` rendering label dưới mỗi node là **last octet only** (`.184` thay vì `192.168.100.184`) qua helper `shortLabel()`. IPv6 → `…<last 4 hex>`. Full IP vẫn được render trong hover tooltip + Asset Detail drawer.
+
+---
+
+## 21. Launcher (v3)
+
+### 21.1 `run.py`
+
+File: [`run.py`](run.py).
+
+```bash
+python3 run.py              # backend + pipeline + frontend
+python3 run.py --check      # prereq diagnostics, no service start
+python3 run.py --no-ui      # headless (API + pipeline only)
+python3 run.py --no-pipeline
+```
+
+Tính năng:
+
+| Feature | Mô tả |
+|---|---|
+| Prereq check | venv · `.env` · `node_modules` · port 5432 alive · port 3001/8080 free · Zeek log activity · log dir readable |
+| Spawn supervisor | `subprocess.Popen` per service trong process group riêng (`os.setsid`) |
+| Coloured prefix logs | `[API]` xanh lá · `[PIPE]` tím · `[UI]` xanh dương — multiplexed vào 1 stdout |
+| Graceful shutdown | Ctrl-C → SIGTERM cả group → đợi 5s → SIGKILL nếu timeout |
+| Crash supervisor | Bất kỳ child nào exit → tear-down toàn bộ + return code của child |
+| Idempotent | `--check` exit code 2 nếu blocking issues (port busy, postgres down, …) |
+
+### 21.2 Lifecycle
+
+```
+Manual:                                Launcher:
+$ npm run server   (terminal 1)        $ python3 run.py
+$ npm run dev:ui   (terminal 2)            ├── [API ] uvicorn :3001
+$ python -m ...zeek_pipeline (T3)          ├── [PIPE] zeek_pipeline
+$ tail logs                                └── [UI  ] vite :8080
+$ Ctrl-C × 3                           Ctrl-C → graceful all
+```
+
+### 21.3 Production deployment hint
+
+Cho production thực tế nên thay bằng systemd unit per service (vì `run.py` design cho dev / lab). Mẫu:
+
+```ini
+# /etc/systemd/system/hqg-api.service
+[Service]
+ExecStart=/opt/hqg/.venv/bin/python -m uvicorn passive_asset_intel.api.main:app \
+          --host 0.0.0.0 --port 3001
+WorkingDirectory=/opt/hqg
+Restart=on-failure
+```
+
+Tương tự cho `hqg-pipeline.service` và `hqg-ui.service` (pre-built bundle, served by nginx).
+
+---
+
+## 📝 Tổng kết v3
+
+| Metric | v2.1 | v3.0 |
+|---|---|---|
+| Total assets passive | ~30 | 138 |
+| Real-MAC coverage | <5% | 70% (sau khi enable mac-logging) |
+| Vendor enrichment | external API only | offline IEEE OUI + cache |
+| Anomaly types | 0 (chỉ classify) | 6 types |
+| Threat intel sources | 0 | 2 (VT + AbuseIPDB) |
+| Triage workflow | ❌ | ✅ status / assign / note / audit |
+| Auto-purge default | 30 days | disabled (manual control) |
+| Single-command launcher | ❌ | ✅ `python3 run.py` |
+| Lines of new code | — | ~5,000 (additive only) |
+| Schema changes | — | 5 new tables, 0 ALTERs phá vỡ |
