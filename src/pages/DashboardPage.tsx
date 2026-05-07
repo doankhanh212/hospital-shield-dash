@@ -2,6 +2,8 @@ import { Monitor, Network, Globe, Lock, TrendingUp, RefreshCw, Cpu, Play, Square
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar } from 'recharts';
 import StatCard from '@/components/widgets/StatCard';
 import PageHeader from '@/components/widgets/PageHeader';
+import LiveThreatStrip from '@/components/xdr/LiveThreatStrip';
+import SocControlPanel from '@/components/soc/SocControlPanel';
 import { StatCardsSkeleton, ChartSkeleton, TableSkeleton } from '@/components/widgets/Skeletons';
 import { useChartTheme } from '@/hooks/useChartTheme';
 import {
@@ -163,8 +165,14 @@ const DashboardPage = () => {
         </span>
       </div>
 
-      {/* ── Stats + Controls (1 row, 4 cols) ────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* ── SOC Control Panel ───────────────────────────────────────────── */}
+      <SocControlPanel />
+
+      {/* ── Live Threat Activity (XDR overlay) ──────────────────────────── */}
+      <LiveThreatStrip />
+
+      {/* ── KPI tiles ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard title="Tổng tài sản" value={totalAssets} icon={Monitor} trend={`${activeAssets} hoạt động gần đây`} />
         <StatCard title="Kết nối" value={totalConns.toLocaleString()} icon={Network} variant="info" trend={`${fmtBytes(bytesOut)} gửi / ${fmtBytes(bytesIn)} nhận`} />
 
@@ -182,34 +190,6 @@ const DashboardPage = () => {
           </div>
         </div>
 
-        {/* Scan control */}
-        <div className="rounded-lg border border-border bg-card p-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className={`h-2.5 w-2.5 rounded-full ${scanRunning ? 'bg-success animate-pulse' : 'bg-muted-foreground'}`} />
-            <div>
-              <p className="text-xs font-semibold text-foreground">Quét mạng</p>
-              <p className="text-[11px] text-muted-foreground">{scanRunning ? 'Đang chạy' : 'Đã dừng'}</p>
-            </div>
-          </div>
-          <div className="flex gap-1.5">
-            <button
-              disabled
-              className="flex items-center gap-1.5 rounded-lg bg-success/15 border border-success/25 px-3 py-1.5 text-[11px] font-medium text-success disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title="Tạm thời vô hiệu hoá — sẽ kết nối với Zeek sau"
-            >
-              <Play size={12} />
-              Bắt đầu
-            </button>
-            <button
-              disabled
-              className="flex items-center gap-1.5 rounded-lg bg-rose-500/15 border border-rose-500/25 px-3 py-1.5 text-[11px] font-medium text-rose-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title="Tạm thời vô hiệu hoá — sẽ kết nối với Zeek sau"
-            >
-              <Square size={12} />
-              Dừng
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* ── Charts Row 1: Device pie + Traffic ────────────────────────── */}

@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw, Network as NetIcon, ShieldAlert } from 'lucide-react';
 import PageHeader from '@/components/widgets/PageHeader';
 import { TableSkeleton } from '@/components/widgets/Skeletons';
 import { useDns, useTls, useHttp } from '@/hooks/useApi';
+import XdrAlertsTab from '@/components/xdr/XdrAlertsTab';
 import { format } from 'date-fns';
 
 type LogEntry = {
@@ -83,11 +84,15 @@ const LogsPage = () => {
 
   const refetchAll = () => { refetchDns(); refetchTls(); refetchHttp(); };
 
+  const [tab, setTab] = useState<'network' | 'alerts'>('network');
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Nhật ký hệ thống"
-        description={`${logs.length} sự kiện từ Zeek logs`}
+        description={tab === 'network'
+          ? `${logs.length} sự kiện từ Zeek logs`
+          : 'Cảnh báo bảo mật theo thời gian thực (XDR)'}
         actions={
           <button onClick={refetchAll} className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <RefreshCw size={13} /> Làm mới
@@ -95,6 +100,33 @@ const LogsPage = () => {
         }
       />
 
+      {/* ── Tabs (Network Logs · Security Alerts) ─────────────────────── */}
+      <div className="flex border-b border-border">
+        <button
+          onClick={() => setTab('network')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+            tab === 'network'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <NetIcon size={14} /> Network Logs
+        </button>
+        <button
+          onClick={() => setTab('alerts')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+            tab === 'alerts'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <ShieldAlert size={14} /> Security Alerts
+        </button>
+      </div>
+
+      {tab === 'alerts' && <XdrAlertsTab />}
+
+      {tab === 'network' && (<>
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={15} />
@@ -153,6 +185,7 @@ const LogsPage = () => {
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 };

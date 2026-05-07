@@ -90,6 +90,13 @@ class DiskManager:
             await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
 
     async def _run_cleanup(self) -> None:
+        # Retention disabled when LOG_RETENTION_DAYS <= 0 — keep everything,
+        # let the analyst purge manually via /api/data/purge.
+        if self._config.log_retention_days <= 0:
+            logger.info(
+                "DiskManager: auto-purge disabled (LOG_RETENTION_DAYS=0)",
+            )
+            return
         retention_days = max(self._config.log_retention_days, _MIN_RETENTION_DAYS)
         cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
         logger.info(

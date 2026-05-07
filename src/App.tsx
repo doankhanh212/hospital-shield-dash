@@ -11,6 +11,7 @@ import AssetDetailPage from "./pages/AssetDetailPage";
 import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
 import NetworkPage from "./pages/NetworkPage";
 import AlertsPage from "./pages/AlertsPage";
+import XdrPage from "./pages/XdrPage";
 import LogsPage from "./pages/LogsPage";
 import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
@@ -20,6 +21,7 @@ import AdminSystemPage from "./pages/admin/AdminSystemPage";
 import AdminRulesPage from "./pages/admin/AdminRulesPage";
 import AdminIntegrationsPage from "./pages/admin/AdminIntegrationsPage";
 import AdminSetupWizardPage from "./pages/admin/AdminSetupWizardPage";
+import AdminDataPage from "./pages/admin/AdminDataPage";
 import NotFound from "./pages/NotFound";
 import { authStorage } from "./lib/auth";
 
@@ -57,6 +59,7 @@ const App = () => (
               <Route path="/vulnerabilities" element={<VulnerabilitiesPage />} />
               <Route path="/network" element={<NetworkPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
+              <Route path="/xdr"    element={<XdrPage />} />
               <Route path="/logs" element={<LogsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
@@ -65,6 +68,7 @@ const App = () => (
               <Route path="/admin/rules" element={<AdminRulesPage />} />
               <Route path="/admin/integrations" element={<AdminIntegrationsPage />} />
               <Route path="/admin/setup" element={<AdminSetupWizardPage />} />
+              <Route path="/admin/data"  element={<AdminDataPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

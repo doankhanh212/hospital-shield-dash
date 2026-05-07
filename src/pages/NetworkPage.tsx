@@ -23,6 +23,7 @@ import { useChartTheme } from '@/hooks/useChartTheme';
 import { useConnections, useBehaviors, useTopology } from '@/hooks/useApi';
 import type { TopologyNode, TopologyConnection, TopologyVlan } from '@/lib/api';
 import AssetTooltip from '@/components/network/AssetTooltip';
+import LiveThreatStrip from '@/components/xdr/LiveThreatStrip';
 import { format } from 'date-fns';
 
 const HOVER_DELAY_MS = 100;
@@ -109,6 +110,8 @@ const NetworkPage = () => {
           </button>
         }
       />
+
+      <LiveThreatStrip />
 
       {/* Tab bar */}
       <div className="flex items-center gap-1.5 border-b border-border">

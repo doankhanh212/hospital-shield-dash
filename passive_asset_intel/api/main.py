@@ -29,7 +29,11 @@ from passive_asset_intel.api.routes import (
     vulnerabilities,
 )
 from passive_asset_intel.api.routes import auth as auth_routes
+from passive_asset_intel.api.routes import data as data_routes
+from passive_asset_intel.api.routes import soc as soc_routes
+from passive_asset_intel.api.routes import xdr as xdr_routes
 from passive_asset_intel.db.schema_fixes import ensure_alert_indexes
+from passive_asset_intel.xdr.schema import backfill_asset_uuid_links, ensure_xdr_schema
 from passive_asset_intel.generator.api_routes import router as generator_router
 from passive_asset_intel.services.disk_manager import DiskManager
 from passive_asset_intel.services.scan_service import ScanService
@@ -58,6 +62,8 @@ async def lifespan(app: FastAPI):
         statement_cache_size=0,
     )
     await ensure_alert_indexes(pool)
+    await ensure_xdr_schema(pool)
+    await backfill_asset_uuid_links(pool)
     app.state.pool = pool
     app.state.config = config
     app.state.scan_service = ScanService(pool, config)
@@ -109,6 +115,9 @@ app.include_router(vulnerabilities.router)
 app.include_router(integrations.router)
 app.include_router(reports.router)
 app.include_router(generator_router)
+app.include_router(xdr_routes.router)
+app.include_router(soc_routes.router)
+app.include_router(data_routes.router)
 
 
 _HEALTH_DB_TIMEOUT_S = 3.0

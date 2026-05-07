@@ -1,6 +1,7 @@
 """Abstract base class for all Zeek log parsers — supports TSV (default) and JSON formats."""
 
 import asyncio
+import json
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -91,6 +92,35 @@ class BaseParser(ABC):
 
         raw_lines = await loop.run_in_executor(None, _read_lines)
 
+        # ── Format detection ───────────────────────────────────────────
+        # Modern Zeek installs (esp. when redef LogAscii::use_json = T)
+        # write one JSON object per line.  Detect by peeking the first
+        # non-empty, non-blank line.  JSON path skips the entire TSV
+        # header machinery below.
+        first_real = next((l.lstrip() for l in raw_lines if l.strip()), "")
+        if first_real.startswith("{"):
+            for line_no, raw_line in enumerate(raw_lines, start=1):
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    self.logger.warning(
+                        "Skipping malformed JSON row",
+                        extra={"file": str(path), "line": line_no, "error": str(exc)},
+                    )
+                    continue
+                if isinstance(record, dict):
+                    # Coerce values to strings to match the TSV path's contract,
+                    # so downstream parsers don't need to special-case types.
+                    yield {
+                        k: (None if v is None else (v if isinstance(v, str) else json.dumps(v) if isinstance(v, (list, dict)) else str(v)))
+                        for k, v in record.items()
+                    }
+            return
+
+        # ── TSV path (Zeek default header-based format) ────────────────
         for line_no, raw_line in enumerate(raw_lines, start=1):
             line = raw_line.rstrip("\n")
             if line.startswith("#fields"):

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Activity, AlertCircle, Bell, Bug, CheckCircle2, Database, Loader2, RefreshCw, Save, Shield, XCircle, FlaskConical, Clock } from 'lucide-react';
 import PageHeader from '@/components/widgets/PageHeader';
+import ThreatIntelIntegrations from '@/components/admin/ThreatIntelIntegrations';
 import { useHealth, useNvdIntegration, useNvdSave, useNvdSync, useNvdTest, useNvdGenerateAlerts } from '@/hooks/useApi';
 
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -362,6 +363,9 @@ const AdminIntegrationsPage = () => {
         </div>
       </div>
       </div>
+
+      {/* ── Threat Intelligence (VirusTotal · AbuseIPDB) ─────────────── */}
+      <ThreatIntelIntegrations />
     </div>
   );
 };

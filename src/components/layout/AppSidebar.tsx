@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Sun, Moon, ChevronDown } from 'lucide-react';
 import {
   LayoutDashboard, Monitor, Share2, Bell, ScrollText, Shield,
-  Users, ShieldCheck, Cog, Plug
+  Users, ShieldCheck, Cog, Plug, Radar, Database
 } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useState } from 'react';
@@ -16,6 +16,7 @@ const monitoringMenu = [
 
 // PHÂN TÍCH — investigation surface
 const analysisMenu = [
+  { path: '/xdr',       icon: Radar,      label: 'XDR Command' },
   { path: '/alerts',    icon: Bell,       label: 'Cảnh báo' },
   { path: '/logs',      icon: ScrollText, label: 'Nhật ký' },
 ];
@@ -25,6 +26,7 @@ const adminMenu = [
   { path: '/admin/users',        icon: Users,       label: 'Người dùng' },
   { path: '/admin/roles',        icon: ShieldCheck, label: 'Phân quyền' },
   { path: '/admin/integrations', icon: Plug,        label: 'Tích hợp' },
+  { path: '/admin/data',         icon: Database,    label: 'Quản lý dữ liệu' },
   { path: '/admin/system',       icon: Cog,         label: 'Cấu hình hệ thống' },
 ];
 

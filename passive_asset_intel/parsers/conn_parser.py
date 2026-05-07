@@ -46,8 +46,14 @@ class ConnParser(BaseParser):
                         orig_bytes = _safe_int(record.get("orig_bytes"))
                         resp_bytes = _safe_int(record.get("resp_bytes"))
 
-                        src_id = await self.repo.resolve_asset(conn, id_orig, ts)
-                        dst_id = await self.repo.resolve_asset(conn, id_resp, ts)
+                        # ── L2 enrichment (only present when policy/protocols/conn/mac-logging is loaded)
+                        # Skip well-known non-asset MACs: 00:00:* (zero), ff:ff:* (broadcast),
+                        # 33:33:* (IPv6 multicast), 01:00:5e:* (IPv4 multicast).
+                        orig_mac = _normalise_mac(record.get("orig_l2_addr"))
+                        resp_mac = _normalise_mac(record.get("resp_l2_addr"))
+
+                        src_id = await self.repo.resolve_asset(conn, id_orig, ts, mac=orig_mac)
+                        dst_id = await self.repo.resolve_asset(conn, id_resp, ts, mac=resp_mac)
                         await self.repo.upsert_asset_ip(conn, src_id, id_orig, ts)
                         await self.repo.upsert_asset_ip(conn, dst_id, id_resp, ts)
 
@@ -82,6 +88,23 @@ class ConnParser(BaseParser):
         if behavior_rows:
             await self.repo.write_behaviors(behavior_rows)
         return processed, failed
+
+
+_INVALID_MAC_PREFIXES = ("00:00:", "ff:ff:", "33:33:", "01:00:5e", "01:80:c2")
+
+
+def _normalise_mac(raw: Any) -> str | None:
+    """Return a lowercase MAC string, or None for missing / non-asset addresses.
+
+    Skips multicast / broadcast / IPv6-multicast / spanning-tree group addresses
+    so we don't create phantom assets out of them.
+    """
+    if not raw:
+        return None
+    mac = str(raw).strip().lower()
+    if len(mac) < 11 or any(mac.startswith(p) for p in _INVALID_MAC_PREFIXES):
+        return None
+    return mac
 
 
 def _safe_int(val: Any) -> int | None:

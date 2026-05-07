@@ -76,6 +76,31 @@ def _save_cache_file(cache: dict[str, str]) -> None:
         )
 
 
+# ── Offline OUI lookup via the `manuf` package (IEEE database bundled) ─
+# Loaded once on import; thread-safe (read-only after init).  If manuf is
+# not installed we silently fall back to the HTTP API path.
+try:
+    from manuf import manuf as _manuf
+    _MANUF_PARSER = _manuf.MacParser()
+    _MANUF_AVAILABLE = True
+except Exception:
+    _MANUF_PARSER = None
+    _MANUF_AVAILABLE = False
+
+
+def _lookup_manuf(mac: str) -> str | None:
+    """Return a vendor string from the offline IEEE OUI DB, or None."""
+    if not _MANUF_AVAILABLE or _MANUF_PARSER is None:
+        return None
+    try:
+        v = _MANUF_PARSER.get_manuf_long(mac) or _MANUF_PARSER.get_manuf(mac)
+        if v and v.strip():
+            return v.strip()[:MAX_VENDOR_LEN]
+    except Exception:
+        pass
+    return None
+
+
 # ── Module-level cache, initialized on import ───────────────────────
 _MODULE_CACHE: dict[str, str] = _load_cache_file()
 
@@ -175,6 +200,14 @@ class MacVendorResolver:
         # Check cache (includes KNOWN_VENDORS seeded on import)
         if oui in self._cache:
             return self._cache[oui]
+
+        # ── Offline manuf lookup (instant, no network) ─────────────────
+        offline = _lookup_manuf(mac)
+        if offline:
+            self._cache[oui] = offline
+            self._cache_dirty = True
+            _save_cache_file(self._cache)
+            return offline
 
         # Rate-limited API call
         await self._rate_limit()

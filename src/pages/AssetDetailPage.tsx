@@ -6,6 +6,7 @@ import {
   CircuitBoard, HelpCircle, Monitor, Bug,
 } from 'lucide-react';
 import { useAsset } from '@/hooks/useApi';
+import AssetAnomalyPanel from '@/components/xdr/AssetAnomalyPanel';
 import { format } from 'date-fns';
 
 // ─── Confidence cap — inference system, never 100% ──────────────────────────
@@ -365,6 +366,8 @@ const AssetDetailPage = () => {
             </div>
           )}
         </Section>
+
+        <AssetAnomalyPanel ip={primaryIp} />
 
       </div>
     </div>

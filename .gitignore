@@ -29,3 +29,17 @@ __pycache__/
 # Local backend secrets and runtime caches
 passive_asset_intel/.env
 passive_asset_intel/.mac_vendor_cache.json
+
+# Python venv (was accidentally staged)
+.venv/
+venv/
+
+# Top-level .env (root) — contains DB password & API keys
+/.env
+
+# Local Zeek log copies
+/logs/
+
+# Stray dev-time files
+_test_inference.py
+/tmp/
